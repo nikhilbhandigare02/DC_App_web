@@ -1,0 +1,350 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+ * Design tokens ported from the Flutter app:
+ *   lib/utils/app_colors.dart      -> color palette
+ *   lib/utils/app_text_styles.dart -> typography scale
+ * Keep these in sync if the Flutter theme changes.
+ * ───────────────────────────────────────────────────────────── */
+@theme {
+  /* Brand — richened from the original ported Flutter palette: deeper,
+   * more saturated navy/teal for a more premium modern-SaaS feel, while
+   * keeping the same brand hues (see MEMORY/commit history if reverting). */
+  --color-primary: #123c5e;
+  --color-primary-dark: #0a2740;
+  --color-primary-light: #2e6a96;
+  --color-primary-pale: #e6eef5;
+
+  --color-accent: #0ea5ae;
+  --color-accent-dark: #0b7f87;
+  --color-accent-light: #4fd2d9;
+  --color-accent-pale: #dff6f7;
+
+  --color-gold: #c99a3d;
+  --color-gold-pale: #fbf1dd;
+
+  /* Surfaces — a touch warmer/lighter than the old flat cool gray-white. */
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-variant: #f1f4f7;
+
+  /* Text */
+  --color-text-primary: #0f2436;
+  --color-text-secondary: #546e7a;
+  --color-text-tertiary: #90a4ae;
+  --color-divider: #d8e2ea;
+
+  /* Semantic status */
+  --color-success: #2e9e7a;
+  --color-success-pale: #e1f3ec;
+  --color-warning: #e8a33d;
+  --color-warning-pale: #fbf0db;
+  --color-error: #d9534f;
+  --color-error-dark: #a83632;
+  --color-error-pale: #fae5e4;
+  --color-info: #3d7ab8;
+  --color-info-pale: #e3eef7;
+
+  /* Domain-specific accents */
+  --color-report-green: #2e9e7a;
+  --color-report-green-dark: #238062;
+  --color-field-error: #e05050;
+  --color-dashboard-highlight: #123c5e;
+  --color-nav-selected-dot: #0ea5ae;
+  --color-appointment-accent: #6c5ce7;
+  --color-appointment-pale: #eeebfb;
+
+  /* Fonts */
+  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Restrained motion for the SaaS-admin redesign. The old mobile-app
+ * "floating blob" / pulsing-badge decoration is gone; what's left is a
+ * handful of small, professional entrance transitions reused by the auth
+ * shell, splash screen, and toast stack.
+ * ───────────────────────────────────────────────────────────── */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-toast-in {
+  animation: toast-in 0.25s ease-out both;
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+.animate-toast-out {
+  animation: toast-out 0.2s ease-in both;
+}
+
+/* Modal / Drawer entrance + exit — both components stay mounted a beat
+ * longer on close so this can play instead of just vanishing. */
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.animate-modal-in {
+  animation: modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes modal-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+}
+.animate-modal-out {
+  animation: modal-out 0.16s ease-in both;
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-backdrop-in {
+  animation: backdrop-in 0.2s ease-out both;
+}
+
+@keyframes backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.animate-backdrop-out {
+  animation: backdrop-out 0.16s ease-in both;
+}
+
+@keyframes drawer-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-drawer-in-right {
+  animation: drawer-in-right 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes drawer-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.animate-drawer-out-right {
+  animation: drawer-out-right 0.18s ease-in both;
+}
+
+@keyframes drawer-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-drawer-in-left {
+  animation: drawer-in-left 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes drawer-out-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+.animate-drawer-out-left {
+  animation: drawer-out-left 0.18s ease-in both;
+}
+
+/* Table row stagger-in on initial data load; capped delay is applied inline
+ * per-row by the Table component so large result sets don't crawl in. */
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-row-in {
+  animation: row-in 0.3s ease-out both;
+}
+
+/* Route-level content transition (HomeLayout's <Outlet /> wrapper) — quicker
+ * than the entrance animations above so navigating feels snappy. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-page-in {
+  animation: page-in 0.2s ease-out both;
+}
+
+/* Auth form field stagger (Login/ForgotPassword/etc field groups). */
+@keyframes field-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-field-in {
+  animation: field-in 0.35s ease-out both;
+}
+
+/* Auth pages wrap their fields in a single <form> passed as AuthFormCard's
+ * children — stagger the form's direct children (label+input groups, the
+ * submit button, etc.) purely via CSS so no page has to opt in individually. */
+.auth-stagger > form > * {
+  animation: field-in 0.4s ease-out both;
+}
+.auth-stagger > form > *:nth-child(1) {
+  animation-delay: 0.03s;
+}
+.auth-stagger > form > *:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.auth-stagger > form > *:nth-child(3) {
+  animation-delay: 0.13s;
+}
+.auth-stagger > form > *:nth-child(4) {
+  animation-delay: 0.18s;
+}
+.auth-stagger > form > *:nth-child(5) {
+  animation-delay: 0.23s;
+}
+.auth-stagger > form > *:nth-child(n + 6) {
+  animation-delay: 0.28s;
+}
+
+/* OTP digit entry feedback. */
+@keyframes digit-pulse {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-digit-pulse {
+  animation: digit-pulse 0.22s ease-out;
+}
+
+/* Loading skeleton shimmer sweep, shared by Dashboard/Profile skeletons and
+ * the Table's loading rows. */
+@keyframes shimmer-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-surface-variant);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.7) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.5s ease-in-out infinite;
+}
