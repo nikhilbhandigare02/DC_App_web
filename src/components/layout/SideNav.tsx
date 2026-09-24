@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import symbolLogo from '../../assets/hs360-symbol-1024.png';
-import { IconBuilding, IconCalendar, IconChevronRight, IconFileUp, IconHome, IconLockReset, IconUser } from '../icons';
+import { IconBuilding, IconCalendar, IconChevronRight, IconFileUp, IconFolder, IconHome, IconLockReset, IconUser } from '../icons';
 
 export interface SideNavLink {
   to: string;
@@ -15,6 +15,7 @@ export const SIDE_NAV_LINKS: SideNavLink[] = [
   { to: '/home/profile', label: 'DC Profile', icon: IconUser },
   { to: '/home/appointments', label: 'Appointments', icon: IconCalendar },
   { to: '/home/upload-report', label: 'Upload Report', icon: IconFileUp },
+  { to: '/home/view-reports', label: 'View Report', icon: IconFolder },
 ];
 
 /** Secondary links — reachable from the sidebar but visually de-emphasized below the primary group. */

@@ -9,7 +9,7 @@ import { pick, pickString } from '../utils/pick';
 import { ddlOptionsFromResponse } from './ddlApi';
 import { flattenProfileEnvelope } from './profileApi';
 import type { DdlOptionModel } from '../types/ddl';
-import type { ReportUploadListItem, ReportUploadListResponseModel } from '../types/report';
+import type { ReportUploadDocument, ReportUploadListItem, ReportUploadListResponseModel } from '../types/report';
 
 function numOrUndefined(value: unknown): number | undefined {
   if (value == null || value === '') return undefined;
@@ -54,6 +54,7 @@ export const GET_ID_PROOF_DROPDOWN_ENDPOINT = 'api/ReportUploadDropdown/GetIdPro
 export const GET_DC_REPORT_DROPDOWN_ENDPOINT = 'api/ReportUploadDropdown/GetDCReport';
 export const GET_REPORT_UPLOAD_LIST_ENDPOINT = 'api/ReportUpload/GetReportUploadList';
 export const UPLOAD_REPORT_DOCUMENT_ENDPOINT = 'api/ReportUpload/UploadReportDocument';
+export const GET_REPORT_UPLOAD_VIEW_DOCUMENT_ENDPOINT = 'api/ReportUpload/GetReportUploadViewDocument';
 
 export async function getClientPhotoDropdown(): Promise<DdlOptionModel[]> {
   const response = await apiPostEncryptedSession(GET_CLIENT_PHOTO_DROPDOWN_ENDPOINT, {});
@@ -170,4 +171,57 @@ export async function uploadReportDocument({
   formData.append('File', file);
 
   return apiPostMultipart(UPLOAD_REPORT_DOCUMENT_ENDPOINT, formData);
+}
+
+/**
+ * Normalizes one raw row into {@link ReportUploadDocument}. A plain type
+ * cast on the raw JSON would silently leave every field `undefined`
+ * whenever the backend's casing doesn't match exactly (confirmed mixed
+ * PascalCase/camelCase elsewhere in this backend).
+ */
+function toReportUploadDocument(row: Record<string, unknown>): ReportUploadDocument {
+  return {
+    reportUploadId: numOrUndefined(pick(row, 'reportUploadId', 'ReportUploadId')),
+    caseId: numOrUndefined(pick(row, 'caseId', 'CaseId')),
+    appointmentId: numOrUndefined(pick(row, 'appointmentId', 'AppointmentId')),
+    documentTypeId: numOrUndefined(pick(row, 'documentTypeId', 'DocumentTypeId')),
+    documentType: pickString(row, 'documentType', 'DocumentType') || undefined,
+    identityName: pickString(row, 'identityName', 'IdentityName') || undefined,
+    groupTypeId: numOrUndefined(pick(row, 'groupTypeId', 'GroupTypeId')),
+    groupName: pickString(row, 'groupName', 'GroupName') || undefined,
+    groupTestTypeId: numOrUndefined(pick(row, 'groupTestTypeId', 'GroupTestTypeId')),
+    groupTestName: pickString(row, 'groupTestName', 'GroupTestName') || undefined,
+    testMappingId: numOrUndefined(pick(row, 'testMappingId', 'TestMappingId')),
+    testMappingDocumentName: pickString(row, 'testMappingDocumentName', 'TestMappingDocumentName') || undefined,
+    fileName: pickString(row, 'fileName', 'FileName') || undefined,
+    fileWebPath: pickString(row, 'fileWebPath', 'FileWebPath') || undefined,
+    remark: pickString(row, 'remark', 'Remark') || undefined,
+    finalRemark: pickString(row, 'finalRemark', 'FinalRemark') || undefined,
+  };
+}
+
+/**
+ * Fetches the actual uploaded file records (name, type, download path) for
+ * a provider — used by the "View Report" screen to show what was
+ * uploaded via {@link uploadReportDocument}, grouped by appointment. Distinct
+ * from `getReportUploadList`, which only returns a per-case summary count.
+ */
+export async function getReportUploadViewDocuments(dcProviderId: string): Promise<ReportUploadDocument[]> {
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_REPORT_UPLOAD_VIEW_DOCUMENT_ENDPOINT, {
+    dc_Provider_id: dcProviderId,
+  });
+
+  if (!response || typeof response !== 'object') {
+    throw new Error('Could not load uploaded documents. Please try again.');
+  }
+
+  const success = pick<boolean>(response, 'success', 'Success');
+  if (success === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not load uploaded documents. Please try again.');
+  }
+
+  const rawList = pick<unknown[]>(response, 'data', 'Data');
+  return Array.isArray(rawList)
+    ? rawList.filter((e) => e && typeof e === 'object').map((e) => toReportUploadDocument(e as Record<string, unknown>))
+    : [];
 }

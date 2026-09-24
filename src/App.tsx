@@ -3,6 +3,8 @@ import { AppointmentsPage } from './features/appointments/AppointmentsPage';
 import { ClientInformationPage } from './features/appointments/ClientInformationPage';
 import { FacilityPage } from './features/facility/FacilityPage';
 import { UploadReportPage } from './features/upload-report/UploadReportPage';
+import { ViewReportsPage } from './features/view-reports/ViewReportsPage';
+import { ReportDocumentsPage } from './features/view-reports/ReportDocumentsPage';
 import { HomeLayout } from './routes/HomeLayout';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { Dashboard } from './routes/pages/Dashboard';
@@ -36,6 +38,8 @@ function App() {
             <Route path="appointments" element={<AppointmentsPage />} />
             <Route path="appointments/:appointmentId/client-info" element={<ClientInformationPage />} />
             <Route path="upload-report" element={<UploadReportPage />} />
+            <Route path="view-reports" element={<ViewReportsPage />} />
+            <Route path="view-reports/documents" element={<ReportDocumentsPage />} />
             <Route path="change-password" element={<ChangePassword />} />
             <Route path="facility" element={<FacilityPage />} />
           </Route>

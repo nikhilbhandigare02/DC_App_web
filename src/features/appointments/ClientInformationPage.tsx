@@ -10,9 +10,8 @@ import { Textarea } from '../../components/ui/Textarea';
 import { Button } from '../../components/ui/Button';
 import { Badge, type BadgeTone } from '../../components/ui/Badge';
 import { Table, type TableColumn } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
 import { toast } from '../../lib/toast';
-import { IconBadge, IconFileUp, IconInfo } from '../../components/icons';
+import { IconBadge, IconClose, IconFileUp, IconInfo, IconMaximize, IconMinimize } from '../../components/icons';
 import type { IconProps } from '../../components/icons';
 import { DocumentStatusTable, type DocFileEntry } from './components/DocumentStatusTable';
 import { formatDate, formatDobValue, mapAppointmentDetailsToModels, type AppointmentUIModel } from './types';
@@ -338,6 +337,148 @@ function ReportUploadTable({
       rowKey={(row) => `${row.type}-${row.index}`}
       className="border-divider/70"
     />
+  );
+}
+
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 0.25;
+
+/**
+ * Document preview overlay — an image gets zoom controls (+/-, wheel-free,
+ * reset on open) and a full screen / minimize toggle; a non-image file falls
+ * back to a name/size card, same as before. Portaled to `document.body` for
+ * the same reason `Modal`/`Drawer` are (a `Card` ancestor's `overflow-hidden`
+ * would otherwise clip it, and a page-wrapper animation elsewhere would clip
+ * it to less than the full viewport — see those components' own notes).
+ */
+function DocumentPreviewModal({
+  label,
+  file,
+  onClose,
+}: {
+  label: string | null;
+  file: File | null;
+  onClose: () => void;
+}) {
+  const open = label !== null;
+  const [zoom, setZoom] = useState(1);
+  const [fullScreen, setFullScreen] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setZoom(1);
+      setFullScreen(false);
+    }
+  }, [open, file]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, onClose]);
+
+  const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  useEffect(() => {
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [objectUrl]);
+
+  if (!open) return null;
+
+  const isImage = file ? isImageFile(file) : false;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`flex flex-col overflow-hidden rounded-lg border border-divider bg-surface shadow-xl ${
+          fullScreen ? 'h-[calc(100vh-2rem)] w-[calc(100vw-2rem)]' : 'max-h-[85vh] w-full max-w-[420px]'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-divider bg-gradient-to-r from-primary-pale/50 via-transparent to-transparent px-4 py-3">
+          <h2 className="truncate text-[14px] font-semibold text-text-primary">{label}</h2>
+          <div className="flex shrink-0 items-center gap-1">
+            {isImage && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Zoom out"
+                  disabled={zoom <= ZOOM_MIN}
+                  onClick={() => setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-[15px] font-bold text-text-secondary hover:bg-surface-variant hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  −
+                </button>
+                <span className="w-10 text-center text-xs font-semibold text-text-tertiary">{Math.round(zoom * 100)}%</span>
+                <button
+                  type="button"
+                  aria-label="Zoom in"
+                  disabled={zoom >= ZOOM_MAX}
+                  onClick={() => setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-[15px] font-bold text-text-secondary hover:bg-surface-variant hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  +
+                </button>
+                <span className="mx-1 h-4 w-px bg-divider" />
+              </>
+            )}
+            <button
+              type="button"
+              aria-label={fullScreen ? 'Exit full screen' : 'Full screen'}
+              onClick={() => setFullScreen((f) => !f)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-variant hover:text-text-primary"
+            >
+              {fullScreen ? <IconMinimize size={15} /> : <IconMaximize size={15} />}
+            </button>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-variant hover:text-text-primary"
+            >
+              <IconClose size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto bg-surface-variant">
+          {isImage && objectUrl ? (
+            <div className="flex min-h-full items-center justify-center p-4">
+              <img
+                src={objectUrl}
+                alt={label ?? ''}
+                className="max-w-none rounded-md transition-transform duration-150 ease-out"
+                style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+              />
+            </div>
+          ) : (
+            <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2 px-4 text-center">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="1.6">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6" />
+              </svg>
+              <p className="truncate text-[12.5px] font-medium text-text-secondary">{file?.name ?? 'Preview unavailable'}</p>
+              {file && <p className="text-[11px] text-text-tertiary">{formatFileSize(file.size)}</p>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -842,21 +983,7 @@ export function ClientInformationPage() {
         </div>
       </Card>
 
-      <Modal open={previewLabel !== null} onClose={() => setPreviewLabel(null)} title={previewLabel ?? undefined} width={400}>
-        <div className="flex h-56 items-center justify-center rounded-md border border-divider bg-surface-variant">
-          {previewFile && isImageFile(previewFile) ? (
-            <img src={URL.createObjectURL(previewFile)} alt={previewLabel ?? ''} className="h-full w-full rounded-md object-contain" />
-          ) : (
-            <div className="flex flex-col items-center gap-2 px-4 text-center">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="1.6">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6" />
-              </svg>
-              <p className="truncate text-[12.5px] font-medium text-text-secondary">{previewFile?.name ?? 'Preview unavailable'}</p>
-              {previewFile && <p className="text-[11px] text-text-tertiary">{formatFileSize(previewFile.size)}</p>}
-            </div>
-          )}
-        </div>
-      </Modal>
+      <DocumentPreviewModal label={previewLabel} file={previewFile} onClose={() => setPreviewLabel(null)} />
     </div>
   );
 }
