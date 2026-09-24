@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getReportUploadViewDocuments } from '../../api/reportUploadApi';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { getReportUploadViewDocuments, filterDocumentsByCaseAppointment } from '../../api/reportUploadApi';
 import { getUserData } from '../../lib/storage';
 import { pick } from '../../utils/pick';
 import { flattenProfileEnvelope } from '../../api/profileApi';
@@ -68,12 +68,17 @@ function IconFile() {
  * Proof / Client Photo / Report — each with a "View" action opening a
  * preview. Ported from `ReportDocumentsScreen` (report_documents_screen.dart).
  *
- * Route contract: an optional `clientName` from the `?clientName=` query string.
+ * Route contract: `caseId`/`appointmentId` come from the route params,
+ * an optional `clientName` from the `?clientName=` query string.
  */
 export function ReportDocumentsPage() {
+  const { caseId: caseIdParam, appointmentId: appointmentIdParam } = useParams<{ caseId: string; appointmentId: string }>();
   const [searchParams] = useSearchParams();
   const clientName = searchParams.get('clientName') ?? '';
   const navigate = useNavigate();
+
+  const caseId = Number(caseIdParam);
+  const appointmentId = Number(appointmentIdParam);
 
   const [documents, setDocuments] = useState<ReportUploadDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,8 +98,12 @@ export function ReportDocumentsPage() {
         throw new Error('Provider ID not found. Please login again.');
       }
 
-      const docs = await getReportUploadViewDocuments(String(dcProviderId));
-      setDocuments(docs);
+      const allDocs = await getReportUploadViewDocuments(String(dcProviderId));
+
+      // Filter documents for the specific case and appointment
+      const filteredDocs = filterDocumentsByCaseAppointment(allDocs, caseId, appointmentId);
+
+      setDocuments(filteredDocs);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not load uploaded documents. Please try again.';
       setLoadError(message);
@@ -105,18 +114,19 @@ export function ReportDocumentsPage() {
   }
 
   useEffect(() => {
+    if (!Number.isFinite(caseId) || !Number.isFinite(appointmentId)) return;
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [caseId, appointmentId]);
 
   const grouped = groupDocuments(documents);
-  const title = clientName || 'Documents';
+  const title = clientName || (Number.isFinite(appointmentId) ? `Appointment #${appointmentId}` : 'Documents');
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title={title}
-        description="Report Documents"
+        description={`Case ${Number.isFinite(caseId) ? caseId : '—'} · Appointment ${Number.isFinite(appointmentId) ? appointmentId : '—'}`}
         actions={
           <Button variant="secondary" onClick={() => navigate('/home/view-reports')}>
             Back to list

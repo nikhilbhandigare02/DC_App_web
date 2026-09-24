@@ -39,7 +39,7 @@ function App() {
             <Route path="appointments/:appointmentId/client-info" element={<ClientInformationPage />} />
             <Route path="upload-report" element={<UploadReportPage />} />
             <Route path="view-reports" element={<ViewReportsPage />} />
-            <Route path="view-reports/documents" element={<ReportDocumentsPage />} />
+            <Route path="view-reports/documents/:caseId/:appointmentId" element={<ReportDocumentsPage />} />
             <Route path="change-password" element={<ChangePassword />} />
             <Route path="facility" element={<FacilityPage />} />
           </Route>

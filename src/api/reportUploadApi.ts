@@ -225,3 +225,16 @@ export async function getReportUploadViewDocuments(dcProviderId: string): Promis
     ? rawList.filter((e) => e && typeof e === 'object').map((e) => toReportUploadDocument(e as Record<string, unknown>))
     : [];
 }
+
+/**
+ * Helper function to filter documents by case and appointment from the full list
+ */
+export function filterDocumentsByCaseAppointment(
+  documents: ReportUploadDocument[],
+  caseId: number,
+  appointmentId: number
+): ReportUploadDocument[] {
+  return documents.filter(
+    (doc) => (doc.caseId ?? 0) === caseId && (doc.appointmentId ?? 0) === appointmentId
+  );
+}
