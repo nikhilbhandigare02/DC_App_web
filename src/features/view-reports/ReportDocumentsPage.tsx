@@ -8,14 +8,10 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Modal } from '../../components/ui/Modal';
+import { DocumentPreviewModal } from '../../components/ui/DocumentPreviewModal';
 import { toast } from '../../lib/toast';
+import { isImageFileName } from '../../utils/files';
 import type { ReportUploadDocument } from '../../types/report';
-
-function isImageFileName(fileName: string | undefined): boolean {
-  const ext = (fileName ?? '').split('.').pop()?.toLowerCase() ?? '';
-  return ext === 'jpg' || ext === 'jpeg' || ext === 'png';
-}
 
 /** The group a document is shown under — `identityName` when the backend sends one (e.g. "ID Proof", "Client Photo"), otherwise the report's own `documentType`, falling back to "Report" for a document with neither. */
 function groupLabelOf(doc: ReportUploadDocument): string {
@@ -194,41 +190,13 @@ export function ReportDocumentsPage() {
         </div>
       )}
 
-      <Modal
-        open={previewDoc !== null}
+      <DocumentPreviewModal
+        label={previewDoc ? previewDoc.documentType?.trim() || previewDoc.fileName || 'Document' : null}
         onClose={() => setPreviewDoc(null)}
-        title={previewDoc?.documentType?.trim() || previewDoc?.fileName || 'Document'}
-        width={420}
-      >
-        <div className="flex h-64 items-center justify-center rounded-md border border-divider bg-surface-variant">
-          {previewDoc && isImageFileName(previewDoc.fileName) && previewDoc.fileWebPath ? (
-            <img
-              src={previewDoc.fileWebPath}
-              alt={previewDoc.fileName ?? ''}
-              className="h-full w-full rounded-md object-contain"
-            />
-          ) : (
-            <div className="flex flex-col items-center gap-2 px-4 text-center">
-              <span className="text-text-tertiary">
-                <IconFile />
-              </span>
-              <p className="truncate text-[12.5px] font-medium text-text-secondary">
-                {previewDoc?.fileName ?? 'Preview unavailable'}
-              </p>
-              {previewDoc?.fileWebPath && (
-                <a
-                  href={previewDoc.fileWebPath}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-semibold text-primary hover:underline"
-                >
-                  Open in new tab
-                </a>
-              )}
-            </div>
-          )}
-        </div>
-      </Modal>
+        imageUrl={previewDoc && isImageFileName(previewDoc.fileName) ? previewDoc.fileWebPath : null}
+        fileName={previewDoc?.fileName}
+        openUrl={previewDoc?.fileWebPath}
+      />
     </div>
   );
 }

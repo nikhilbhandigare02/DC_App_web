@@ -265,3 +265,12 @@ export function IconBolt(props: IconProps) {
     </Icon>
   );
 }
+
+export function IconClock(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5v4.8l3.2 1.9" />
+    </Icon>
+  );
+}

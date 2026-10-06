@@ -17,11 +17,12 @@ import { saveFacilityOutsourceDetails } from '../../../api/facilityApi';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
+import { TimePickerField } from '../../../components/ui/TimePickerField';
 import { IconMapPin } from '../../../components/icons';
 import { toast } from '../../../lib/toast';
 import type { DdlOptionModel } from '../../../types/ddl';
 import type { FacilityEntryData } from '../../../types/facility';
-import { resolveEmpanelmentMastId, timeToInputValue, inputValueToTime } from '../utils';
+import { resolveEmpanelmentMastId } from '../utils';
 
 interface FacilityEntryCardProps {
   facility: FacilityEntryData;
@@ -292,17 +293,15 @@ export function FacilityEntryCard({ facility, sourceTypeOptions, visitTypeOption
       />
 
       <div className="grid grid-cols-2 gap-3">
-        <Input
+        <TimePickerField
           label="Facility Time From"
-          type="time"
-          value={timeToInputValue(facility.timeFrom)}
-          onChange={(e) => onChange({ timeFrom: inputValueToTime(e.target.value) })}
+          value={facility.timeFrom}
+          onChange={(timeFrom) => onChange({ timeFrom })}
         />
-        <Input
+        <TimePickerField
           label="Facility Time To"
-          type="time"
-          value={timeToInputValue(facility.timeTo)}
-          onChange={(e) => onChange({ timeTo: inputValueToTime(e.target.value) })}
+          value={facility.timeTo}
+          onChange={(timeTo) => onChange({ timeTo })}
         />
       </div>
 

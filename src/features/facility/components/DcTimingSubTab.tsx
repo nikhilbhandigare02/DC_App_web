@@ -19,9 +19,10 @@ import { useEffect, useState } from 'react';
 import { getDay } from '../../../api/ddlApi';
 import { Button } from '../../../components/ui/Button';
 import { Checkbox } from '../../../components/ui/Checkbox';
+import { TimePickerField } from '../../../components/ui/TimePickerField';
 import { toast } from '../../../lib/toast';
 import type { DayTimingData } from '../../../types/facility';
-import { WEEKDAYS, inputValueToTime, timeToInputValue, timeToMinutes } from '../utils';
+import { WEEKDAYS, timeToMinutes } from '../utils';
 
 const DEFAULT_START = { hour: 9, minute: 0 };
 const DEFAULT_END = { hour: 18, minute: 0 };
@@ -136,21 +137,17 @@ export function DcTimingSubTab({ onSaved }: DcTimingSubTabProps) {
                   />
                 </td>
                 <td className="px-3.5 py-2.5">
-                  <input
-                    type="time"
+                  <TimePickerField
                     disabled={!timing.isWorking}
-                    value={timeToInputValue(timing.startTime)}
-                    onChange={(e) => updateDay(timing.day, { startTime: inputValueToTime(e.target.value) })}
-                    className="rounded-md border border-divider bg-surface px-2 py-1.5 text-sm text-text-primary disabled:bg-surface-variant disabled:text-text-tertiary"
+                    value={timing.startTime}
+                    onChange={(startTime) => updateDay(timing.day, { startTime })}
                   />
                 </td>
                 <td className="px-3.5 py-2.5">
-                  <input
-                    type="time"
+                  <TimePickerField
                     disabled={!timing.isWorking}
-                    value={timeToInputValue(timing.endTime)}
-                    onChange={(e) => updateDay(timing.day, { endTime: inputValueToTime(e.target.value) })}
-                    className="rounded-md border border-divider bg-surface px-2 py-1.5 text-sm text-text-primary disabled:bg-surface-variant disabled:text-text-tertiary"
+                    value={timing.endTime}
+                    onChange={(endTime) => updateDay(timing.day, { endTime })}
                   />
                 </td>
                 <td className="px-3.5 py-2.5">

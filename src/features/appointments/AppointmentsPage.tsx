@@ -165,6 +165,8 @@ export function AppointmentsPage() {
         </div>
       ),
     },
+    { key: 'caseId', header: 'Case ID', sortable: true, render: (row) => row.caseId || '—' },
+    { key: 'appointmentId', header: 'Appointment ID', sortable: true, render: (row) => row.appointmentId || '—' },
     { key: 'visitType', header: 'Visit Type', sortable: true, render: (row) => row.visitType || '—' },
     { key: 'test', header: 'Tests', render: (row) => <span className="text-text-secondary">{row.test || '—'}</span> },
     {

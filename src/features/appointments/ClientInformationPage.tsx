@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getAppointmentDetailsById } from '../../api/appointmentApi';
 import { getClientPhotoDropdown, getDCReportDropdown, getIdProofDropdown, uploadReportDocument } from '../../api/reportUploadApi';
 import type { DdlOptionModel } from '../../types/ddl';
@@ -11,7 +11,8 @@ import { Button } from '../../components/ui/Button';
 import { Badge, type BadgeTone } from '../../components/ui/Badge';
 import { Table, type TableColumn } from '../../components/ui/Table';
 import { toast } from '../../lib/toast';
-import { IconBadge, IconClose, IconFileUp, IconInfo, IconMaximize, IconMinimize } from '../../components/icons';
+import { DocumentPreviewModal } from '../../components/ui/DocumentPreviewModal';
+import { IconBadge, IconFileUp, IconInfo } from '../../components/icons';
 import type { IconProps } from '../../components/icons';
 import { DocumentStatusTable, type DocFileEntry } from './components/DocumentStatusTable';
 import { formatDate, formatDobValue, mapAppointmentDetailsToModels, type AppointmentUIModel } from './types';
@@ -60,16 +61,6 @@ function pickFile(): Promise<File | null> {
     input.onchange = () => resolve(input.files?.[0] ?? null);
     input.click();
   });
-}
-
-function isImageFile(file: File): boolean {
-  return /\.(jpg|jpeg|png)$/i.test(file.name);
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 type SectionAccent = 'primary' | 'accent' | 'gold' | 'appointment-accent' | 'info';
@@ -340,148 +331,6 @@ function ReportUploadTable({
   );
 }
 
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 4;
-const ZOOM_STEP = 0.25;
-
-/**
- * Document preview overlay — an image gets zoom controls (+/-, wheel-free,
- * reset on open) and a full screen / minimize toggle; a non-image file falls
- * back to a name/size card, same as before. Portaled to `document.body` for
- * the same reason `Modal`/`Drawer` are (a `Card` ancestor's `overflow-hidden`
- * would otherwise clip it, and a page-wrapper animation elsewhere would clip
- * it to less than the full viewport — see those components' own notes).
- */
-function DocumentPreviewModal({
-  label,
-  file,
-  onClose,
-}: {
-  label: string | null;
-  file: File | null;
-  onClose: () => void;
-}) {
-  const open = label !== null;
-  const [zoom, setZoom] = useState(1);
-  const [fullScreen, setFullScreen] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setZoom(1);
-      setFullScreen(false);
-    }
-  }, [open, file]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open, onClose]);
-
-  const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
-  useEffect(() => {
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [objectUrl]);
-
-  if (!open) return null;
-
-  const isImage = file ? isImageFile(file) : false;
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
-      role="presentation"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        className={`flex flex-col overflow-hidden rounded-lg border border-divider bg-surface shadow-xl ${
-          fullScreen ? 'h-[calc(100vh-2rem)] w-[calc(100vw-2rem)]' : 'max-h-[85vh] w-full max-w-[420px]'
-        }`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-divider bg-gradient-to-r from-primary-pale/50 via-transparent to-transparent px-4 py-3">
-          <h2 className="truncate text-[14px] font-semibold text-text-primary">{label}</h2>
-          <div className="flex shrink-0 items-center gap-1">
-            {isImage && (
-              <>
-                <button
-                  type="button"
-                  aria-label="Zoom out"
-                  disabled={zoom <= ZOOM_MIN}
-                  onClick={() => setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2)))}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-[15px] font-bold text-text-secondary hover:bg-surface-variant hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  −
-                </button>
-                <span className="w-10 text-center text-xs font-semibold text-text-tertiary">{Math.round(zoom * 100)}%</span>
-                <button
-                  type="button"
-                  aria-label="Zoom in"
-                  disabled={zoom >= ZOOM_MAX}
-                  onClick={() => setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2)))}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-[15px] font-bold text-text-secondary hover:bg-surface-variant hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  +
-                </button>
-                <span className="mx-1 h-4 w-px bg-divider" />
-              </>
-            )}
-            <button
-              type="button"
-              aria-label={fullScreen ? 'Exit full screen' : 'Full screen'}
-              onClick={() => setFullScreen((f) => !f)}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-variant hover:text-text-primary"
-            >
-              {fullScreen ? <IconMinimize size={15} /> : <IconMaximize size={15} />}
-            </button>
-            <button
-              type="button"
-              aria-label="Close"
-              onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-variant hover:text-text-primary"
-            >
-              <IconClose size={16} />
-            </button>
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto bg-surface-variant">
-          {isImage && objectUrl ? (
-            <div className="flex min-h-full items-center justify-center p-4">
-              <img
-                src={objectUrl}
-                alt={label ?? ''}
-                className="max-w-none rounded-md transition-transform duration-150 ease-out"
-                style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
-              />
-            </div>
-          ) : (
-            <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2 px-4 text-center">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="1.6">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6" />
-              </svg>
-              <p className="truncate text-[12.5px] font-medium text-text-secondary">{file?.name ?? 'Preview unavailable'}</p>
-              {file && <p className="text-[11px] text-text-tertiary">{formatFileSize(file.size)}</p>}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 /**
  * Client information + document upload workflow, shown after "Start" on an
  * appointment. Ported from `ClientInformationScreen`
@@ -493,6 +342,7 @@ function DocumentPreviewModal({
  * same way.
  */
 export function ClientInformationPage() {
+  const navigate = useNavigate();
   const { appointmentId: routeAppointmentId } = useParams<{ appointmentId: string }>();
   const [searchParams] = useSearchParams();
   const caseIdParam = searchParams.get('caseId') ?? '';
@@ -759,21 +609,6 @@ export function ClientInformationPage() {
     setPreviewFile(file ?? null);
   }
 
-  /** Resets every section (Identity Proof, Client Photo, Report Upload, Remark) back to its initial empty state. */
-  function clearForm() {
-    setSelectedIdProofs(new Set());
-    setSelectedClientPhotos(new Set());
-    setDocFiles({});
-    setReportDocFiles({});
-    setRemark('');
-    setRemarkError(false);
-    setMissingIdProofs(new Set());
-    setMissingClientPhotos(new Set());
-    setMissingReportUploads(new Set());
-    setIdProofSelectionError(false);
-    setClientPhotoSelectionError(false);
-  }
-
   /**
    * Validates the whole form before saving anything, including the remark:
    * at least one ID Proof type and at least one Client Photo type must be
@@ -827,7 +662,11 @@ export function ClientInformationPage() {
     }
 
     toast.success('Details saved successfully');
-    clearForm();
+    // Report Upload is now done for this case — go back to wherever this
+    // page was opened from (the Appointments list, or the Report Upload
+    // queue) so it remounts and refetches, dropping this case from a
+    // pending queue.
+    navigate(-1);
   }
 
   const infoFields = useMemo(

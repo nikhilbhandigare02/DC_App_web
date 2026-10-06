@@ -5,6 +5,8 @@ import { FacilityPage } from './features/facility/FacilityPage';
 import { UploadReportPage } from './features/upload-report/UploadReportPage';
 import { ViewReportsPage } from './features/view-reports/ViewReportsPage';
 import { ReportDocumentsPage } from './features/view-reports/ReportDocumentsPage';
+import { DcDiscrepancyPage } from './features/dc-discrepancy/DcDiscrepancyPage';
+import { DcDiscrepancyDocumentsPage } from './features/dc-discrepancy/DcDiscrepancyDocumentsPage';
 import { HomeLayout } from './routes/HomeLayout';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { Dashboard } from './routes/pages/Dashboard';
@@ -40,6 +42,8 @@ function App() {
             <Route path="upload-report" element={<UploadReportPage />} />
             <Route path="view-reports" element={<ViewReportsPage />} />
             <Route path="view-reports/documents/:caseId/:appointmentId" element={<ReportDocumentsPage />} />
+            <Route path="dc-discrepancy" element={<DcDiscrepancyPage />} />
+            <Route path="dc-discrepancy/documents/:caseId/:appointmentId" element={<DcDiscrepancyDocumentsPage />} />
             <Route path="change-password" element={<ChangePassword />} />
             <Route path="facility" element={<FacilityPage />} />
           </Route>

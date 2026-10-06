@@ -9,7 +9,7 @@ import { pick, pickString } from '../utils/pick';
 import { ddlOptionsFromResponse } from './ddlApi';
 import { flattenProfileEnvelope } from './profileApi';
 import type { DdlOptionModel } from '../types/ddl';
-import type { ReportUploadDocument, ReportUploadListItem, ReportUploadListResponseModel } from '../types/report';
+import type { DcRejectedCase, RejectedQcDocument, ReportUploadDocument, ReportUploadListItem, ReportUploadListResponseModel } from '../types/report';
 
 function numOrUndefined(value: unknown): number | undefined {
   if (value == null || value === '') return undefined;
@@ -237,4 +237,69 @@ export function filterDocumentsByCaseAppointment(
   return documents.filter(
     (doc) => (doc.caseId ?? 0) === caseId && (doc.appointmentId ?? 0) === appointmentId
   );
+}
+
+export const GET_DC_REJECTED_CASES_ENDPOINT = 'api/ReportUpload/GetDCRejectedCasesByQc';
+
+/** Normalizes one raw row of `GetDCRejectedCasesByQc`'s `data` array. */
+function toDcRejectedCase(row: Record<string, unknown>): DcRejectedCase {
+  return {
+    reportUploadId: numOrUndefined(pick(row, 'reportUploadId', 'ReportUploadId')),
+    appointmentId: numOrUndefined(pick(row, 'appointmentId', 'AppointmentId')),
+    caseId: numOrUndefined(pick(row, 'caseId', 'CaseId')),
+    dcProviderId: numOrUndefined(pick(row, 'dcProviderId', 'DcProviderId')),
+    appointmentDate: pickString(row, 'appointmentDate', 'AppointmentDate') || undefined,
+    providerName: pickString(row, 'providerName', 'ProviderName') || undefined,
+    insuranceCompanyId: numOrUndefined(pick(row, 'insuranceCompanyId', 'InsuranceCompanyId')),
+    companyName: pickString(row, 'companyName', 'CompanyName') || undefined,
+    clientName: pickString(row, 'clientName', 'ClientName') || undefined,
+  };
+}
+
+/** Cases QC rejected for the logged-in DC — the backend resolves the DC from the session token, so no filter is sent. */
+export async function getDcRejectedCases(): Promise<DcRejectedCase[]> {
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_DC_REJECTED_CASES_ENDPOINT, {});
+
+  if (!response || typeof response !== 'object') {
+    throw new Error('Could not load the discrepancy list. Please try again.');
+  }
+  if (pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not load the discrepancy list. Please try again.');
+  }
+
+  const rawList = pick<unknown[]>(response, 'data', 'Data');
+  return Array.isArray(rawList)
+    ? rawList.filter((e) => e && typeof e === 'object').map((e) => toDcRejectedCase(e as Record<string, unknown>))
+    : [];
+}
+
+export const GET_REJECT_QC_REPORT_LIST_ENDPOINT = 'api/ReportUpload/GetRejectQcReportListDc';
+
+/** The documents of one case/appointment that QC rejected (`remark` is the reviewer's reason for each). */
+export async function getRejectQcReportList(caseId: number, appointmentId: number): Promise<RejectedQcDocument[]> {
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_REJECT_QC_REPORT_LIST_ENDPOINT, {
+    caseId,
+    appointmentId,
+  });
+
+  if (!response || typeof response !== 'object') {
+    throw new Error('Could not load the rejected documents. Please try again.');
+  }
+  if (pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not load the rejected documents. Please try again.');
+  }
+
+  const rawList = pick<unknown[]>(response, 'data', 'Data');
+  if (!Array.isArray(rawList)) return [];
+  return rawList
+    .filter((e) => e && typeof e === 'object')
+    .map((e) => {
+      const row = e as Record<string, unknown>;
+      return {
+        ...toReportUploadDocument(row),
+        qcRemark: pickString(row, 'qcRemark', 'QCRemark', 'QcRemark') || undefined,
+        passFailResult: boolOrUndefined(pick(row, 'passFailResult', 'PassFailResult')) ?? null,
+        documentDisplayName: pickString(row, 'documentDisplayName', 'DocumentDisplayName') || undefined,
+      };
+    });
 }

@@ -61,3 +61,26 @@ export interface ReportUploadDocumentResponseModel {
   message?: string;
   data?: ReportUploadDocument[];
 }
+
+/** One item of `GetDCRejectedCasesByQc`'s `data` array. */
+export interface DcRejectedCase {
+  reportUploadId?: number;
+  appointmentId?: number;
+  caseId?: number;
+  dcProviderId?: number;
+  /** `M/d/yyyy h:mm:ss AM`, e.g. `"10/1/2026 12:00:00 AM"`. */
+  appointmentDate?: string;
+  providerName?: string;
+  insuranceCompanyId?: number;
+  companyName?: string;
+  clientName?: string;
+}
+
+/** One item of `GetRejectQcReportListDc`'s `data` array — a document QC rejected. */
+export interface RejectedQcDocument extends ReportUploadDocument {
+  /** The QC reviewer's remark for this specific document. */
+  qcRemark?: string;
+  /** `false` = failed QC; `true` = passed; `null` = not reviewed. */
+  passFailResult?: boolean | null;
+  documentDisplayName?: string;
+}
