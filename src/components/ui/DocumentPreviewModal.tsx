@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { isImageFileName } from '../../utils/files';
+import { documentUrlCandidates, isImageFileName } from '../../utils/files';
 import { IconClose, IconMaximize, IconMinimize } from '../icons';
 
 const ZOOM_MIN = 0.5;
@@ -42,13 +42,15 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, fileName,
   const open = label !== null;
   const [zoom, setZoom] = useState(1);
   const [fullScreen, setFullScreen] = useState(false);
-  const [remoteImageFailed, setRemoteImageFailed] = useState(false);
+  /** Index into the candidate URLs for the remote image; past the end = every candidate failed. */
+  const [attempt, setAttempt] = useState(0);
+  const candidates = useMemo(() => documentUrlCandidates(imageUrl), [imageUrl]);
 
   useEffect(() => {
     if (open) {
       setZoom(1);
       setFullScreen(false);
-      setRemoteImageFailed(false);
+      setAttempt(0);
     }
   }, [open, file, imageUrl]);
 
@@ -76,7 +78,7 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, fileName,
   if (!open) return null;
 
   const localIsImage = file ? isImageFileName(file.name) : false;
-  const imageSrc = localIsImage ? objectUrl : remoteImageFailed ? null : (imageUrl ?? null);
+  const imageSrc = localIsImage ? objectUrl : (candidates[attempt] ?? null);
   const isImage = !!imageSrc;
   const displayName = file?.name ?? fileName ?? 'Preview unavailable';
 
@@ -156,7 +158,7 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, fileName,
                 src={imageSrc}
                 alt={label ?? ''}
                 onError={() => {
-                  if (!localIsImage) setRemoteImageFailed(true);
+                  if (!localIsImage) setAttempt((a) => a + 1);
                 }}
                 className="rounded-md object-contain transition-all duration-150 ease-out"
                 style={{ width: `${Math.min(zoom, 1) * 100}%`, height: `${Math.min(zoom, 1) * 100}%` }}
@@ -170,7 +172,7 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, fileName,
               <p className="truncate text-[12.5px] font-medium text-text-secondary">{displayName}</p>
               {file && <p className="text-[11px] text-text-tertiary">{formatFileSize(file.size)}</p>}
               {!file && openUrl && (
-                <a href={openUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary hover:underline">
+                <a href={documentUrlCandidates(openUrl)[0] ?? openUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary hover:underline">
                   Open in new tab
                 </a>
               )}

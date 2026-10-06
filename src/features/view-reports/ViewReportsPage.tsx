@@ -10,6 +10,8 @@ import { Table, type TableColumn } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
 import { toast } from '../../lib/toast';
+import { PaginationBar } from '../../components/ui/PaginationBar';
+import { usePagination } from '../../utils/usePagination';
 
 /** One case/appointment row shown in the View Report list. */
 interface CaseAppointment {
@@ -112,6 +114,8 @@ export function ViewReportsPage() {
     );
   }
 
+  const { currentPage, totalPages, pageItems, setPage, totalItems } = usePagination(filtered);
+
   const columns: TableColumn<CaseAppointment>[] = [
     { key: 'caseId', header: 'Case ID', sortable: true, render: (row) => row.caseId || '—' },
     { key: 'appointmentId', header: 'Appointment ID', sortable: true, render: (row) => row.appointmentId || '—' },
@@ -184,12 +188,17 @@ export function ViewReportsPage() {
       <Card>
         <Table
           columns={columns}
-          data={filtered}
+          data={pageItems}
           rowKey={(row) => `${row.caseId}-${row.appointmentId}`}
           onRowClick={openCaseAppointment}
           isLoading={isLoading}
           emptyState={loadError ?? 'No case/appointments with documents yet.'}
         />
+        {totalItems > 0 && (
+          <div className="border-t border-divider pt-3">
+            <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageSelected={setPage} totalItems={totalItems} />
+          </div>
+        )}
       </Card>
     </div>
   );

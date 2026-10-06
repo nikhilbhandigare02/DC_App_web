@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getAppointmentDetailsById } from '../../api/appointmentApi';
-import { getClientPhotoDropdown, getDCReportDropdown, getIdProofDropdown, uploadReportDocument } from '../../api/reportUploadApi';
+import { getClientPhotoDropdown, getDCReportDropdown, getIdProofDropdown, updateReportRemark, uploadReportDocument } from '../../api/reportUploadApi';
 import type { DdlOptionModel } from '../../types/ddl';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
@@ -216,13 +216,14 @@ function reportSlotLabel(entry: DocFileEntry | undefined, hasError: boolean): st
 }
 
 /**
- * Report Upload's table — one row per attached document, plus an always-
- * present trailing empty slot per report type for adding the next one.
- * Selecting a file on that trailing slot both fills it in and appends a
- * fresh empty slot below it; there's no delete — a filled slot only offers
- * "Edit" to replace its file. Each row uploads for real the moment its own
- * "Upload" button is clicked (status flips Pending -> Uploading -> Uploaded/
- * Failed there), independent of the page's Save action.
+ * Report Upload's table — one row per attached document. A report type shows
+ * a single empty slot until its first file is attached; after that, another
+ * document is added only by clicking that row's "Add" button (rather than a
+ * fresh empty slot opening automatically after every pick), which opens one
+ * more empty slot until a file is picked into it. There's no delete — a
+ * filled slot only offers "Edit" to replace its file. Each row uploads for
+ * real the moment its own "Upload" button is clicked (status flips Pending ->
+ * Uploading -> Uploaded/Failed there), independent of the page's Save action.
  */
 function ReportUploadTable({
   docs,
@@ -230,11 +231,16 @@ function ReportUploadTable({
   onChooseFile,
   onPreview,
   onUpload,
+  onAddSlot,
+  openSlots,
   emptyMessage,
   missingDocs,
 }: {
   docs: string[];
   files: Record<string, DocFileEntry[]>;
+  /** Report types whose extra empty slot was opened with "Add". */
+  openSlots: Set<string>;
+  onAddSlot: (type: string) => void;
   onChooseFile: (type: string, index: number) => void;
   onPreview: (type: string, entry: DocFileEntry) => void;
   onUpload: (type: string, index: number) => void;
@@ -249,7 +255,7 @@ function ReportUploadTable({
   const rows: ReportSlotRow[] = docs.flatMap((type) => {
     const entries = files[type] ?? [];
     const slots: ReportSlotRow[] = entries.map((entry, index) => ({ type, index, entry }));
-    slots.push({ type, index: entries.length });
+    if (entries.length === 0 || openSlots.has(type)) slots.push({ type, index: entries.length });
     return slots;
   });
 
@@ -298,9 +304,16 @@ function ReportUploadTable({
             </div>
           );
         }
+        // "Add" opens one more empty slot — only on the type's last row, once it is uploaded.
+        const isLastRow = row.index === (files[row.type]?.length ?? 0) - 1 && !openSlots.has(row.type);
         if (row.entry.state === 'uploaded') {
           return (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-1.5">
+              {isLastRow && (
+                <Button size="sm" onClick={() => onAddSlot(row.type)}>
+                  + Add
+                </Button>
+              )}
               <Button variant="secondary" size="sm" onClick={() => onChooseFile(row.type, row.index)}>
                 Edit
               </Button>
@@ -367,6 +380,8 @@ export function ClientInformationPage() {
    * documents at once, so it's keyed to arrays.
    */
   const [reportDocFiles, setReportDocFiles] = useState<Record<string, DocFileEntry[]>>({});
+  /** Report types whose extra empty slot is open (after clicking "Add"). */
+  const [openReportSlots, setOpenReportSlots] = useState<Set<string>>(new Set());
 
   const [remark, setRemark] = useState('');
   const [remarkError, setRemarkError] = useState(false);
@@ -477,6 +492,7 @@ export function ClientInformationPage() {
         icName: item.insuranceCompany,
         file: params.file,
         remark: params.remark,
+        isNew: false,
       });
       params.onSuccess();
       return true;
@@ -542,18 +558,26 @@ export function ClientInformationPage() {
 
   /**
    * Picks a file for one report-type slot. `index` at the current array
-   * length fills the trailing "add a file" slot, which both attaches the
-   * file there and (via the extra slot `ReportUploadTable` always renders
-   * past the array's end) makes a fresh empty slot appear below it. Any
-   * other `index` is an existing row's "Edit" — it replaces that row's file
-   * in place and resets its status back to pending.
+   * length fills the trailing empty slot (the first one, or the one opened by
+   * "Add"). Any other `index` is an existing row's "Edit" — it replaces that
+   * row's file in place and resets its status back to pending.
    */
   async function handleChooseReportFile(type: string, index: number) {
     const file = await pickFile();
     if (!file) return;
     setReportDocFiles((prev) => {
       const arr = [...(prev[type] ?? [])];
+      const fillsTrailingSlot = index >= arr.length;
       arr[index] = { file, state: 'pending' };
+      if (fillsTrailingSlot) {
+        // That extra slot is now filled — back to showing "Add" instead of an already-open empty slot.
+        setOpenReportSlots((open) => {
+          if (!open.has(type)) return open;
+          const next = new Set(open);
+          next.delete(type);
+          return next;
+        });
+      }
       return { ...prev, [type]: arr };
     });
     setMissingReportUploads((prev) => {
@@ -620,7 +644,7 @@ export function ClientInformationPage() {
    * already done. Only once every check passes does it confirm success and
    * clear the form.
    */
-  function handleSaveAll() {
+  async function handleSaveAll() {
     const idProofEmpty = selectedIdProofs.size === 0;
     const clientPhotoEmpty = selectedClientPhotos.size === 0;
     const missingIdProofsNow = new Set(
@@ -658,6 +682,19 @@ export function ClientInformationPage() {
         remarkEmpty ? 'Remark is required.' : null,
       ].filter(Boolean);
       toast.error(messages.join(' '));
+      return;
+    }
+
+    const caseId = Number(item.caseId);
+    const appointmentId = Number(item.appointmentId);
+    if (!Number.isFinite(caseId) || !Number.isFinite(appointmentId)) {
+      toast.error('Could not save the remark.');
+      return;
+    }
+    try {
+      await updateReportRemark(caseId, appointmentId, remark.trim());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save the remark. Please try again.');
       return;
     }
 
@@ -776,6 +813,8 @@ export function ClientInformationPage() {
               docs={reportTypeOptions}
               files={reportDocFiles}
               missingDocs={missingReportUploads}
+              openSlots={openReportSlots}
+              onAddSlot={(type) => setOpenReportSlots((prev) => new Set(prev).add(type))}
               onChooseFile={(type, index) => void handleChooseReportFile(type, index)}
               onUpload={(type, index) => void handleUploadReportFile(type, index)}
               onPreview={(type, entry) => openPreview(`${type} — ${entry.file.name}`, entry.file)}
@@ -816,7 +855,7 @@ export function ClientInformationPage() {
             Every document above must be uploaded (via its own row's Upload button) before you can
             save.
           </p>
-          <Button variant="primary" onClick={handleSaveAll}>
+          <Button variant="primary" onClick={() => void handleSaveAll()}>
             Save
           </Button>
         </div>

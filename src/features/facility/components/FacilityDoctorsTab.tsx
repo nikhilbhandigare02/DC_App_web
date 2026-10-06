@@ -18,6 +18,8 @@ import { Panel } from '../../../components/ui/Panel';
 import { Table, type TableColumn } from '../../../components/ui/Table';
 import type { ProviderDoctorDetail } from '../../../types/doctor';
 import { toast } from '../../../lib/toast';
+import { PaginationBar } from '../../../components/ui/PaginationBar';
+import { usePagination } from '../../../utils/usePagination';
 import { AddDoctorForm } from './AddDoctorForm';
 import { IconPlus, IconTrash } from './icons';
 
@@ -70,6 +72,8 @@ export function FacilityDoctorsTab() {
   const rows: DoctorRow[] = doctors
     .map((doctor, index) => ({ key: rowKeyFor(doctor, index), doctor }))
     .filter((row) => !removedKeys.has(row.key));
+
+  const { currentPage, totalPages, pageItems, setPage, totalItems } = usePagination(rows);
 
   const columns: TableColumn<DoctorRow>[] = [
     {
@@ -178,9 +182,10 @@ export function FacilityDoctorsTab() {
           </Button>
         </div>
       ) : (
+        <>
         <Table
           columns={columns}
-          data={rows}
+          data={pageItems}
           rowKey={(row) => row.key}
           isLoading={loading}
           emptyState={
@@ -197,6 +202,12 @@ export function FacilityDoctorsTab() {
           }
           className="rounded-none border-0"
         />
+        {totalItems > 0 && (
+          <div className="border-t border-divider py-3">
+            <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageSelected={setPage} totalItems={totalItems} />
+          </div>
+        )}
+        </>
       )}
 
       <Drawer open={showAddDoctor} onClose={() => setShowAddDoctor(false)} title="Add Doctor" width={520}>

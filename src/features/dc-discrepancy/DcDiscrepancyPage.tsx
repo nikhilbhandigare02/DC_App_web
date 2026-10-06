@@ -5,6 +5,8 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { PaginationBar } from '../../components/ui/PaginationBar';
+import { usePagination } from '../../utils/usePagination';
 import { IconChevronRight } from '../../components/icons';
 import { toast } from '../../lib/toast';
 import type { DcRejectedCase } from '../../types/report';
@@ -79,6 +81,8 @@ export function DcDiscrepancyPage() {
     );
   }, [cases, searchQuery]);
 
+  const { currentPage, totalPages, pageItems, setPage, totalItems } = usePagination(filtered);
+
   function openCase(c: DcRejectedCase) {
     navigate(
       `/home/dc-discrepancy/documents/${c.caseId}/${c.appointmentId}?clientName=${encodeURIComponent(c.clientName || `Case ${c.caseId}`)}&insurance=${encodeURIComponent(c.companyName ?? '')}`,
@@ -125,7 +129,7 @@ export function DcDiscrepancyPage() {
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 2xl:grid-cols-3">
-              {filtered.map((c) => (
+              {pageItems.map((c) => (
                 <button
                   key={`${c.reportUploadId}-${c.caseId}-${c.appointmentId}`}
                   type="button"
@@ -135,9 +139,9 @@ export function DcDiscrepancyPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-extrabold text-text-primary">{c.clientName || `Case #${c.caseId}`}</p>
                     <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
-                      <InfoField label="Case ID" value={String(c.caseId ?? '—')} />
+                      {/* <InfoField label="Case ID" value={String(c.caseId ?? '—')} /> */}
                       <InfoField label="Appointment ID" value={String(c.appointmentId ?? '—')} />
-                      <InfoField label="Insurance" value={c.companyName || '—'} />
+                      {/* <InfoField label="Insurance" value={c.companyName || '—'} /> */}
                       <InfoField label="Appointment Date" value={formatApiDate(c.appointmentDate)} />
                     </div>
                   </div>
@@ -147,6 +151,9 @@ export function DcDiscrepancyPage() {
                 </button>
               ))}
             </div>
+          )}
+          {totalItems > 0 && (
+            <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageSelected={setPage} totalItems={totalItems} />
           )}
         </>
       )}

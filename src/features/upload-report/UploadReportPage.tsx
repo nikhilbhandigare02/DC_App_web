@@ -12,7 +12,7 @@ import { toast } from '../../lib/toast';
 import type { AppointmentUIModel } from '../appointments/types';
 import { formatDate } from '../appointments/types';
 import { FilterBar, type UploadReportFilters } from './components/FilterBar';
-import { PaginationBar } from './components/PaginationBar';
+import { PaginationBar } from '../../components/ui/PaginationBar';
 import { caseCode, mapReportUploadItemsToModels } from './mapping';
 
 const PAGE_SIZE = 10;

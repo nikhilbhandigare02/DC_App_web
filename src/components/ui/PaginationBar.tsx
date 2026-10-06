@@ -1,13 +1,16 @@
-import { Button } from '../../../components/ui/Button';
+import { Button } from './Button';
 
 interface PaginationBarProps {
   currentPage: number;
   totalPages: number;
   onPageSelected: (page: number) => void;
+  /** When given, a "Showing a–b of N" line is shown (even when everything fits on one page). */
+  totalItems?: number;
+  pageSize?: number;
 }
 
 /** Prev/page-number/Next controls, ported from `_PaginationBar` (upload_report_screen.dart), restyled compact. */
-export function PaginationBar({ currentPage, totalPages, onPageSelected }: PaginationBarProps) {
+export function PaginationBar({ currentPage, totalPages, onPageSelected, totalItems, pageSize = 10 }: PaginationBarProps) {
   const edgeCount = 1;
   const pages: (number | null)[] = [];
   let last: number | null = null;
@@ -21,7 +24,20 @@ export function PaginationBar({ currentPage, totalPages, onPageSelected }: Pagin
     }
   }
 
+  const summary =
+    totalItems != null && totalItems > 0 ? (
+      <p className="text-center text-xs text-text-tertiary">
+        Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalItems)} of {totalItems}
+      </p>
+    ) : null;
+
+  // Server-paged lists (no total given) hide the bar until there is a second page;
+  // client-paged lists always show it so paging is visible on every list screen.
+  if (totalPages <= 1 && totalItems == null) return summary;
+
   return (
+    <div className="flex flex-col items-center gap-2">
+      {summary}
     <div className="flex items-center justify-center gap-1">
       <Button
         variant="secondary"
@@ -68,6 +84,7 @@ export function PaginationBar({ currentPage, totalPages, onPageSelected }: Pagin
           <path d="m9 18 6-6-6-6" />
         </svg>
       </Button>
+    </div>
     </div>
   );
 }

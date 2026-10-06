@@ -12,6 +12,8 @@ import { AppointmentDetailModal } from './components/AppointmentDetailModal';
 import { CalendarCard } from './components/CalendarCard';
 import { FilterPanel } from './components/FilterPanel';
 import { formatDate, isSameDay, mapAppointmentDetailsToModels, splitTestNames, type AppointmentUIModel } from './types';
+import { PaginationBar } from '../../components/ui/PaginationBar';
+import { usePagination } from '../../utils/usePagination';
 
 function statusTone(status: string): BadgeTone {
   switch (status.toLowerCase()) {
@@ -134,6 +136,7 @@ export function AppointmentsPage() {
     setTestTypeFilter(null);
   }
 
+  const { currentPage, totalPages, pageItems, setPage, totalItems } = usePagination(filteredAppointments);
   const selectedDateLabel = selectedDay ? formatDate(selectedDay) : 'All dates';
   const hasFilters = hasActiveFilters || searchQuery.trim() !== '';
 
@@ -239,7 +242,7 @@ export function AppointmentsPage() {
             </div>
             <Table
               columns={columns}
-              data={filteredAppointments}
+              data={pageItems}
               rowKey={(row, idx) => `${row.appointmentId}-${idx}`}
               onRowClick={(row) => setSelectedAppointment(row)}
               isLoading={isLoading}
@@ -265,6 +268,11 @@ export function AppointmentsPage() {
                 </div>
               }
             />
+            {totalItems > 0 && (
+              <div className="border-t border-divider pt-3">
+                <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageSelected={setPage} totalItems={totalItems} />
+              </div>
+            )}
           </Card>
         </div>
       </div>

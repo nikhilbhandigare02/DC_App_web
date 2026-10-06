@@ -5,12 +5,14 @@ import { getUserData } from '../../lib/storage';
 import { pick } from '../../utils/pick';
 import { flattenProfileEnvelope } from '../../api/profileApi';
 import { PageHeader } from '../../components/ui/PageHeader';
+import { PaginationBar } from '../../components/ui/PaginationBar';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { DocumentPreviewModal } from '../../components/ui/DocumentPreviewModal';
 import { toast } from '../../lib/toast';
 import { isImageFileName } from '../../utils/files';
+import { usePagination } from '../../utils/usePagination';
 import type { ReportUploadDocument } from '../../types/report';
 
 /** The group a document is shown under — `identityName` when the backend sends one (e.g. "ID Proof", "Client Photo"), otherwise the report's own `documentType`, falling back to "Report" for a document with neither. */
@@ -115,7 +117,9 @@ export function ReportDocumentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, appointmentId]);
 
-  const grouped = groupDocuments(documents);
+  // 10 documents per page; the cards group only the current page's documents.
+  const { currentPage, totalPages, pageItems, setPage, totalItems } = usePagination(documents);
+  const grouped = groupDocuments(pageItems);
   const title = clientName || (Number.isFinite(appointmentId) ? `Appointment #${appointmentId}` : 'Documents');
 
   return (
@@ -187,6 +191,9 @@ export function ReportDocumentsPage() {
               </div>
             </Card>
           ))}
+          {totalItems > 0 && (
+            <PaginationBar currentPage={currentPage} totalPages={totalPages} onPageSelected={setPage} totalItems={totalItems} />
+          )}
         </div>
       )}
 

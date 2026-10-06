@@ -143,6 +143,8 @@ export interface UploadReportDocumentParams {
   icName?: string;
   file: File;
   remark?: string;
+  /** `true` when this file re-uploads a QC-rejected document; sent as `IsNew` (saved to `is_new`). */
+  isNew?: boolean;
 }
 
 /**
@@ -160,6 +162,7 @@ export async function uploadReportDocument({
   icName,
   file,
   remark,
+  isNew = false,
 }: UploadReportDocumentParams): Promise<unknown> {
   const formData = new FormData();
   formData.append('CaseId', String(caseId));
@@ -168,6 +171,7 @@ export async function uploadReportDocument({
   if (documentTypeName) formData.append('DocumentTypeName', documentTypeName);
   if (icName) formData.append('IC_Name', icName);
   if (remark != null) formData.append('Remark', remark);
+  formData.append('IsNew', String(isNew));
   formData.append('File', file);
 
   return apiPostMultipart(UPLOAD_REPORT_DOCUMENT_ENDPOINT, formData);
@@ -302,4 +306,68 @@ export async function getRejectQcReportList(caseId: number, appointmentId: numbe
         documentDisplayName: pickString(row, 'documentDisplayName', 'DocumentDisplayName') || undefined,
       };
     });
+}
+
+export const UPDATE_REPORT_REMARK_ENDPOINT = 'api/ReportUpload/UpdateReportRemark';
+
+/**
+ * Writes the final remark onto the case/appointment's report master row
+ * (`tbl_report_mast_dc`) — called from the page's Save action so the saved
+ * remark reflects whatever is in the field now, not what it was at each
+ * document's upload time.
+ */
+export async function updateReportRemark(caseId: number, appointmentId: number, remark: string): Promise<void> {
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(UPDATE_REPORT_REMARK_ENDPOINT, {
+    caseId,
+    appointmentId,
+    remark,
+  });
+
+  if (response && typeof response === 'object' && pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not save the remark. Please try again.');
+  }
+}
+
+export const UPDATE_REPORT_DOCUMENT_ENDPOINT = 'api/ReportUpload/UpdateReportDocument';
+
+/** The `reportUploadId` of the row `uploadReportDocument` just inserted, or undefined when the response doesn't carry one. */
+export function uploadedReportId(response: unknown): number | undefined {
+  if (!response || typeof response !== 'object') return undefined;
+  return numOrUndefined(pick(response as Record<string, unknown>, 'reportUploadId', 'ReportUploadId'));
+}
+
+export interface UpdateReportDocumentParams {
+  /** `reportUploadId` returned when the document was re-uploaded. */
+  reportUploadId: number;
+  caseId: number;
+  appointmentId: number;
+  documentTypeId?: number;
+  documentTypeName?: string;
+  icName?: string;
+  file: File;
+}
+
+/**
+ * "Edit" on an already re-uploaded document: replaces that row's file in the
+ * database instead of inserting another row.
+ */
+export async function updateReportDocument({
+  reportUploadId,
+  caseId,
+  appointmentId,
+  documentTypeId,
+  documentTypeName,
+  icName,
+  file,
+}: UpdateReportDocumentParams): Promise<unknown> {
+  const formData = new FormData();
+  formData.append('ReportUploadId', String(reportUploadId));
+  formData.append('CaseId', String(caseId));
+  formData.append('AppointmentId', String(appointmentId));
+  if (documentTypeId != null) formData.append('DocumentTypeId', String(documentTypeId));
+  if (documentTypeName) formData.append('DocumentTypeName', documentTypeName);
+  if (icName) formData.append('IC_Name', icName);
+  formData.append('File', file);
+
+  return apiPostMultipart(UPDATE_REPORT_DOCUMENT_ENDPOINT, formData);
 }
