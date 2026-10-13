@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppointmentsPage } from './features/appointments/AppointmentsPage';
 import { ClientInformationPage } from './features/appointments/ClientInformationPage';
 import { FacilityPage } from './features/facility/FacilityPage';
+import { FacilityListPage } from './features/facility/FacilityListPage';
 import { UploadReportPage } from './features/upload-report/UploadReportPage';
 import { ViewReportsPage } from './features/view-reports/ViewReportsPage';
 import { ReportDocumentsPage } from './features/view-reports/ReportDocumentsPage';
@@ -46,6 +47,7 @@ function App() {
             <Route path="dc-discrepancy/documents/:caseId/:appointmentId" element={<DcDiscrepancyDocumentsPage />} />
             <Route path="change-password" element={<ChangePassword />} />
             <Route path="facility" element={<FacilityPage />} />
+            <Route path="facility/list" element={<FacilityListPage />} />
           </Route>
         </Route>
 

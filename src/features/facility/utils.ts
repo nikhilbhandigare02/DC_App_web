@@ -27,6 +27,28 @@ export function resolveEmpanelmentMastId(): number {
   return Number.isFinite(asNumber) ? asNumber : 4;
 }
 
+/**
+ * The provider id captured at login (the same value the appointment list sends as `DcProviderId`),
+ * read from the stored login data. 0 when it is not there.
+ */
+export function resolveProviderId(): number {
+  const cached = (getUserData() ?? {}) as Record<string, unknown>;
+  const cachedRow = flattenProfileEnvelope(cached);
+  const raw = pick<number | string>(
+    cachedRow,
+    'ProviderId',
+    'providerId',
+    'ProviderNumber',
+    'providerNumber',
+    'DcProviderId',
+    'dcProviderId',
+    'Dc_Provider_id',
+    'dc_Provider_id',
+  );
+  const asNumber = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(asNumber) ? asNumber : 0;
+}
+
 export function pad2(value: number): string {
   return value.toString().padStart(2, '0');
 }

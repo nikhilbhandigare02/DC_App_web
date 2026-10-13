@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { getAppointmentDetailsById } from '../../../api/appointmentApi';
 import { Modal } from '../../../components/ui/Modal';
 import { Badge, type BadgeTone } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { toast } from '../../../lib/toast';
+import { StartDocumentsPanel } from './StartDocumentsPanel';
 import { formatDate, mapAppointmentDetailsToModels, type AppointmentUIModel } from '../types';
 
 interface FieldDef {
@@ -47,6 +47,8 @@ function statusTone(status: string): BadgeTone {
 interface AppointmentDetailModalProps {
   item: AppointmentUIModel;
   onClose: () => void;
+  /** Called after "Complete Test Checklist" uploaded documents, so the caller can reload its list. */
+  onUploaded?: () => void;
 }
 
 /**
@@ -56,10 +58,11 @@ interface AppointmentDetailModalProps {
  * `AppointmentDetailContent` (appointment_detail_view.dart). Migrated to
  * the shared `Modal` primitive with a clean label/value grid.
  */
-export function AppointmentDetailModal({ item, onClose }: AppointmentDetailModalProps) {
-  const navigate = useNavigate();
+export function AppointmentDetailModal({ item, onClose, onUploaded }: AppointmentDetailModalProps) {
   const [current, setCurrent] = useState(item);
   const [isLoading, setIsLoading] = useState(true);
+  /** "Start" swaps the dialog's content in place for the Client Photo / ID Proof step. */
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,21 +100,18 @@ export function AppointmentDetailModal({ item, onClose }: AppointmentDetailModal
   }, [item.appointmentId, item.caseId]);
 
   function handleStart() {
-    // An empty `appointmentId` would build a path like `/home/appointments//client-info`,
-    // which doesn't match the `:appointmentId` route and silently bounces to the home
-    // screen via the catch-all redirect — guard against that instead.
     if (!current.appointmentId) {
       toast.error('This appointment can’t be opened yet — no appointment ID was returned.');
       return;
     }
-    navigate(`/home/appointments/${encodeURIComponent(current.appointmentId)}/client-info?caseId=${encodeURIComponent(current.caseId)}`);
+    setStarted(true);
   }
 
   return (
     <Modal
       open
       onClose={onClose}
-      width={560}
+      width={started ? 760 : 560}
       title={
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-appointment-accent to-appointment-accent/70 text-[13px] font-bold text-white shadow-[0_2px_8px_-1px_rgba(108,92,231,0.55)]">
@@ -125,17 +125,28 @@ export function AppointmentDetailModal({ item, onClose }: AppointmentDetailModal
         </div>
       }
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            Missed
-          </Button>
-          <Button variant="primary" onClick={handleStart}>
-            Start
-          </Button>
-        </>
+        started ? undefined : (
+          <>
+            <Button variant="secondary" onClick={onClose}>
+              Missed
+            </Button>
+            <Button variant="primary" onClick={handleStart}>
+              Start
+            </Button>
+          </>
+        )
       }
     >
-      {isLoading ? (
+      {started ? (
+        <StartDocumentsPanel
+          item={current}
+          onBack={() => setStarted(false)}
+          onDone={() => {
+            onUploaded?.();
+            onClose();
+          }}
+        />
+      ) : isLoading ? (
         <div className="flex justify-center py-10">
           <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>

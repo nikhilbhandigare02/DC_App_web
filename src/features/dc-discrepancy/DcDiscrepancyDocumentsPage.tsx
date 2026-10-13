@@ -112,7 +112,27 @@ export function DcDiscrepancyDocumentsPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      setDocuments(await getRejectQcReportList(caseId, appointmentId));
+      const list = await getRejectQcReportList(caseId, appointmentId);
+      setDocuments(list);
+      // The server knows which documents were already re-uploaded (from any
+      // device); merge that over what this browser remembers.
+      setReuploads((prev) => {
+        const next = { ...prev };
+        list.forEach((doc, index) => {
+          // Re-uploaded per the server: either the procedure names the re-upload
+          // row directly, or the row linked to this document is itself a re-upload (is_new = 1).
+          const uploadId = doc.reuploadedReportUploadId || (doc.isNew && doc.dcReportUploadId ? doc.dcReportUploadId : 0);
+          if (uploadId) {
+            next[docKey(doc, index)] = {
+              uploadId,
+              typeId: doc.reuploadedDocumentTypeId || (doc.documentTypeId ?? 0),
+              typeName: doc.reuploadedTypeName || docTitle(doc),
+            };
+          }
+        });
+        saveReuploads(caseId, appointmentId, next);
+        return next;
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not load documents. Please try again.';
       setLoadError(message);

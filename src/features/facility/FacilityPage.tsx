@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { FacilityConfigurationTab } from './components/FacilityConfigurationTab';
 import { FacilityDoctorsTab } from './components/FacilityDoctorsTab';
@@ -13,8 +14,18 @@ import { Tabs } from './components/Tabs';
 
 const TOP_TABS = [{ label: 'Facility Doctors' }, { label: 'Facility Configuration' }];
 
+/** Where the Facilities list's Edit buttons send you: which top tab and which Configuration sub-tab to open. */
+interface FacilityNavState {
+  topTab?: number;
+  subTab?: number;
+  /** Id of the facility being updated through the three forms. */
+  editId?: number;
+}
+
 export function FacilityPage() {
-  const [topTabIndex, setTopTabIndex] = useState(0);
+  const location = useLocation();
+  const navState = (location.state ?? {}) as FacilityNavState;
+  const [topTabIndex, setTopTabIndex] = useState(navState.topTab ?? 0);
 
   return (
     <div className="relative">
@@ -24,7 +35,7 @@ export function FacilityPage() {
 
       <Tabs items={TOP_TABS} activeIndex={topTabIndex} onChange={setTopTabIndex} className="mb-5" />
 
-      {topTabIndex === 0 ? <FacilityDoctorsTab /> : <FacilityConfigurationTab />}
+      {topTabIndex === 0 ? <FacilityDoctorsTab /> : <FacilityConfigurationTab initialSubTab={navState.subTab ?? 0} editId={navState.editId} />}
     </div>
   );
 }

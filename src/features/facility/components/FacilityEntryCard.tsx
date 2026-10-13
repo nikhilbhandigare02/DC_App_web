@@ -13,7 +13,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getCityByPincode, getCityName, getDistrictByState, getDistrictName, getStateName, getStates } from '../../../api/ddlApi';
-import { saveFacilityOutsourceDetails } from '../../../api/facilityApi';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
@@ -22,7 +21,6 @@ import { IconMapPin } from '../../../components/icons';
 import { toast } from '../../../lib/toast';
 import type { DdlOptionModel } from '../../../types/ddl';
 import type { FacilityEntryData } from '../../../types/facility';
-import { resolveEmpanelmentMastId } from '../utils';
 
 interface FacilityEntryCardProps {
   facility: FacilityEntryData;
@@ -30,16 +28,22 @@ interface FacilityEntryCardProps {
   visitTypeOptions: DdlOptionModel[];
   onRemove: () => void;
   onChange: (patch: Partial<FacilityEntryData>) => void;
-  /** Closes the drawer. Used by the Inhouse "Save & Close" action — the outsource
-   * path saves to the server instead and stays open to show the result. */
-  onClose: () => void;
+  /** "Done": checks this facility's form and closes it. Nothing is sent — the tab's "Save & Close" sends everything. */
+  onDone: () => void;
 }
 
 function isOutsourceLabel(value?: string | null): boolean {
   return !!value && value.toLowerCase().includes('outsource');
 }
 
-export function FacilityEntryCard({ facility, sourceTypeOptions, visitTypeOptions, onRemove, onChange, onClose }: FacilityEntryCardProps) {
+export function FacilityEntryCard({
+  facility,
+  sourceTypeOptions,
+  visitTypeOptions,
+  onRemove,
+  onChange,
+  onDone,
+}: FacilityEntryCardProps) {
   const outsource = isOutsourceLabel(facility.sourceType);
 
   const [stateOptions, setStateOptions] = useState<DdlOptionModel[]>([]);
@@ -54,8 +58,6 @@ export function FacilityEntryCard({ facility, sourceTypeOptions, visitTypeOption
 
   const [photoDragOver, setPhotoDragOver] = useState(false);
   const [videoDragOver, setVideoDragOver] = useState(false);
-
-  const [saving, setSaving] = useState(false);
 
   const lastLookedUpPincode = useRef<string | null>(null);
 
@@ -184,68 +186,11 @@ export function FacilityEntryCard({ facility, sourceTypeOptions, visitTypeOption
     onChange({ sourceType: value || null });
   }
 
-  function handleSaveInhouseDetails() {
-    if (!facility.sourceType || !facility.visitType) {
-      toast.error('Please select Source Type and Visit Type before saving.');
-      return;
-    }
-    // Field values are already persisted live via onChange — this just confirms
-    // the entry and closes the drawer, matching the outsource save affordance.
-    onClose();
-  }
-
   function handlePhotoFile(file: File | null) {
     onChange({ dcPhotoFile: file });
   }
   function handleVideoFile(file: File | null) {
     onChange({ dcVideoFile: file });
-  }
-
-  async function handleSaveOutsourceDetails() {
-    if (
-      !facility.contactPerson.trim() ||
-      !facility.fullAddress.trim() ||
-      facility.pincode.trim().length !== 6 ||
-      !facility.stateId ||
-      !facility.districtId ||
-      !facility.cityId ||
-      !facility.dcPhotoFile
-    ) {
-      toast.error('Please fill Contact Person, Full Address, a valid Pincode, State, District, City and DC Photo before saving.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const empanelmentMastId = resolveEmpanelmentMastId();
-      const data = {
-        EmpanelmentMastId: empanelmentMastId,
-        OutsourceDetailId: 0,
-        FacilityTypeId: Number(facility.typeCode) || 0,
-        ContactPerson: facility.contactPerson.trim(),
-        ContactNumber: facility.contactNumber.trim(),
-        DistanceKm: Number(facility.distanceKm.trim()) || 0,
-        FullAddress: facility.fullAddress.trim(),
-        Latitude: Number(facility.latitude.trim()) || 0,
-        Longitude: Number(facility.longitude.trim()) || 0,
-        City: facility.cityId ?? 0,
-        State: facility.stateId ?? 0,
-        District: facility.districtId ?? 0,
-        Pincode: facility.pincode.trim(),
-      };
-
-      await saveFacilityOutsourceDetails({
-        data,
-        dcPhotoFile: facility.dcPhotoFile,
-        dcVideoFile: facility.dcVideoFile,
-      });
-
-      toast.success('Facility details saved successfully.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save facility details. Please try again.');
-    } finally {
-      setSaving(false);
-    }
   }
 
   const sourceTypeSelectOptions = sourceTypeOptions.map((o) => ({ value: o.label, label: o.label }));
@@ -284,9 +229,10 @@ export function FacilityEntryCard({ facility, sourceTypeOptions, visitTypeOption
         />
       </div>
 
-      <Input label="Source Name" value={facility.sourceName} onChange={(e) => onChange({ sourceName: e.target.value })} placeholder="Source Name" />
+      <Input label="Source Name" required={outsource} value={facility.sourceName} onChange={(e) => onChange({ sourceName: e.target.value })} placeholder="Source Name" />
       <Input
         label="Source Address"
+        required={outsource}
         value={facility.sourceAddress}
         onChange={(e) => onChange({ sourceAddress: e.target.value })}
         placeholder="Source Address"
@@ -460,6 +406,9 @@ export function FacilityEntryCard({ facility, sourceTypeOptions, visitTypeOption
               required
               accept="image/*"
               file={facility.dcPhotoFile ?? null}
+              storedName={facility.dcPhotoFileName}
+              storedUrl={facility.dcPhotoUrl}
+              viewLabel="View image"
               dragOver={photoDragOver}
               onDragOver={setPhotoDragOver}
               onFile={handlePhotoFile}
@@ -468,6 +417,9 @@ export function FacilityEntryCard({ facility, sourceTypeOptions, visitTypeOption
               label="DC Video"
               accept="video/*"
               file={facility.dcVideoFile ?? null}
+              storedName={facility.dcVideoFileName}
+              storedUrl={facility.dcVideoUrl}
+              viewLabel="View video"
               dragOver={videoDragOver}
               onDragOver={setVideoDragOver}
               onFile={handleVideoFile}
@@ -478,13 +430,15 @@ export function FacilityEntryCard({ facility, sourceTypeOptions, visitTypeOption
 
       {outsource ? (
         <div className="sticky  -mx-5 -mb-4 mt-5 flex items-center justify-end border-t border-divider bg-gradient-to-r from-surface to-accent-pale/20 px-5 py-3.5">
-          <Button onClick={handleSaveOutsourceDetails} isLoading={saving}>
-            Save details
+          <Button onClick={onDone}>
+            Done
           </Button>
         </div>
       ) : (
         <div className="sticky bottom-0 -mx-5 -mb-4 mt-5 flex items-center justify-end border-t border-divider bg-gradient-to-r from-surface to-primary-pale/20 px-5 py-3.5">
-          <Button onClick={handleSaveInhouseDetails}>Save &amp; Close</Button>
+          <Button onClick={onDone}>
+            Done
+          </Button>
         </div>
       )}
     </div>
@@ -496,12 +450,30 @@ interface DropZoneFieldProps {
   required?: boolean;
   accept: string;
   file: File | null;
+  /** Update flow: name of the file already stored, shown until a new one is picked. */
+  storedName?: string | null;
   dragOver: boolean;
+  /** A file already saved on the server — gets a view link. */
+  storedUrl?: string | null;
+  viewLabel: string;
   onDragOver: (value: boolean) => void;
   onFile: (file: File | null) => void;
 }
 
-function DropZoneField({ label, required, accept, file, dragOver, onDragOver, onFile }: DropZoneFieldProps) {
+function DropZoneField({ label, required, accept, file, storedName, storedUrl, viewLabel, dragOver, onDragOver, onFile }: DropZoneFieldProps) {
+  const shownName = file?.name ?? storedName ?? null;
+  // A file just picked is opened from the browser's own copy; a saved one from the server.
+  const [pickedUrl, setPickedUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) {
+      setPickedUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPickedUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const viewUrl = file ? pickedUrl : storedUrl ?? null;
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-[13px] font-medium text-text-primary">
@@ -523,17 +495,27 @@ function DropZoneField({ label, required, accept, file, dragOver, onDragOver, on
         className={`flex cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-4 text-center transition-all duration-200 ${
           dragOver
             ? 'border-accent bg-accent-pale shadow-[0_0_0_3px] shadow-accent/15'
-            : file
+            : shownName
               ? 'border-primary/40 bg-primary-pale/40'
               : 'border-divider bg-surface hover:border-accent/50 hover:bg-accent-pale/20'
         }`}
       >
         <input type="file" accept={accept} className="hidden" onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
         <span className="text-[13px] font-medium text-text-primary">
-          {file ? file.name : `Drag & drop or click to upload ${label.toLowerCase()}`}
+          {shownName ?? `Drag & drop or click to upload ${label.toLowerCase()}`}
         </span>
-        {file && <span className="mt-1 text-xs font-semibold text-primary">Click to replace</span>}
+        {shownName && <span className="mt-1 text-xs font-semibold text-primary">Click to replace</span>}
       </label>
+      {viewUrl && (
+        <a
+          href={viewUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="self-start text-xs font-semibold text-primary underline-offset-2 hover:underline"
+        >
+          {viewLabel}
+        </a>
+      )}
     </div>
   );
 }

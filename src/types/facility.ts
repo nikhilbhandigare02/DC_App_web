@@ -28,6 +28,8 @@ export interface TimeOfDayValue {
 /** Working hours for a single day of the week ("DC Timing" tab). */
 export interface DayTimingData {
   day: string;
+  /** The day's id from `GetDay` — what `SaveTimingDetails` takes as `DayName`. */
+  dayId?: number;
   isWorking: boolean;
   startTime: TimeOfDayValue;
   endTime: TimeOfDayValue;
@@ -60,4 +62,16 @@ export interface FacilityEntryData {
   cityName?: string | null;
   dcPhotoFile?: File | null;
   dcVideoFile?: File | null;
+  /** Update flow: names of the photo/video already stored (no File to re-send). */
+  dcPhotoFileName?: string | null;
+  dcVideoFileName?: string | null;
+  /** Update flow: where the stored photo/video can be opened (view link). */
+  dcPhotoUrl?: string | null;
+  /** Latest approval status of a saved facility (status master name, e.g. "DC Requested"); empty for a new one. */
+  status?: string | null;
+  statusId?: number | null;
+  dcVideoUrl?: string | null;
+  /** Ids of the rows already saved (0/undefined = new) — sent back so a re-save updates them. */
+  facilityDetailsId?: number;
+  outsourceDetailId?: number;
 }

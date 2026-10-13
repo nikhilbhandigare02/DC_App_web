@@ -6,7 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Table, type TableColumn } from '../../components/ui/Table';
 import { Badge, type BadgeTone } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { IconCalendar, IconWarning } from '../../components/icons';
+import { IconCalendar, IconClose, IconWarning } from '../../components/icons';
 import { toast } from '../../lib/toast';
 import { AppointmentDetailModal } from './components/AppointmentDetailModal';
 import { CalendarCard } from './components/CalendarCard';
@@ -45,6 +45,8 @@ export function AppointmentsPage() {
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  /** The header's search icon opens a floating search box over the page. */
+  const [showSearch, setShowSearch] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [visitTypeFilter, setVisitTypeFilter] = useState<string | null>(null);
   const [testTypeFilter, setTestTypeFilter] = useState<string | null>(null);
@@ -113,9 +115,11 @@ export function AppointmentsPage() {
   const hasActiveFilters = statusFilter !== null || visitTypeFilter !== null || testTypeFilter !== null;
 
   const filteredAppointments = useMemo(() => {
+    // Nothing is listed until a date is picked on the calendar.
+    if (selectedDay === null) return [];
     const query = searchQuery.trim().toLowerCase();
     return appointments.filter((a) => {
-      const matchesDay = selectedDay === null || isSameDay(a.date, selectedDay);
+      const matchesDay = isSameDay(a.date, selectedDay);
       const matchesSearch =
         query === '' || a.patientName.toLowerCase().includes(query) || a.proposalNo.toLowerCase().includes(query);
       const matchesStatus = statusFilter === null || a.status === statusFilter;
@@ -129,6 +133,11 @@ export function AppointmentsPage() {
     return appointments.some((a) => isSameDay(a.date, day));
   }
 
+  function toggleSearch() {
+    setShowSearch((open) => !open);
+    setSearchQuery('');
+  }
+
   function clearAllFilters() {
     setSelectedDay(null);
     setStatusFilter(null);
@@ -137,7 +146,7 @@ export function AppointmentsPage() {
   }
 
   const { currentPage, totalPages, pageItems, setPage, totalItems } = usePagination(filteredAppointments);
-  const selectedDateLabel = selectedDay ? formatDate(selectedDay) : 'All dates';
+  const selectedDateLabel = selectedDay ? formatDate(selectedDay) : 'Select a date';
   const hasFilters = hasActiveFilters || searchQuery.trim() !== '';
 
   const columns: TableColumn<AppointmentUIModel>[] = [
@@ -192,27 +201,60 @@ export function AppointmentsPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="relative flex flex-col gap-4">
       <PageHeader
         title="Appointments"
         description="Track, search and manage every scheduled visit."
         actions={
+          <>
+          <button
+            type="button"
+            aria-label={showSearch ? 'Close search' : 'Search appointments'}
+            title={showSearch ? 'Close search' : 'Search'}
+            onClick={toggleSearch}
+            className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+              showSearch
+                ? 'border-appointment-accent/40 bg-appointment-pale text-appointment-accent'
+                : 'border-divider bg-surface text-text-secondary hover:bg-surface-variant'
+            }`}
+          >
+            {showSearch ? (
+              <IconClose size={15} />
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            )}
+          </button>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-appointment-accent/25 bg-appointment-pale py-1 pl-1 pr-3 text-[12.5px] font-semibold text-appointment-accent shadow-[0_1px_2px_rgba(108,92,231,0.12)]">
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-appointment-accent text-white shadow-[0_2px_6px_-1px_rgba(108,92,231,0.6)]">
               <IconCalendar size={11} />
             </span>
             {filteredAppointments.length} appointments
           </span>
+          </>
         }
       />
+
+      {/* Floats over the page (no layout shift) under the header. */}
+      {showSearch && (
+        <div className="absolute right-0 top-12 z-30 w-full max-w-[340px] rounded-lg border border-divider bg-surface p-2 shadow-lg">
+          <input
+            autoFocus
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Patient name or proposal no..."
+            className="w-full rounded-md border border-divider bg-surface px-2.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[260px_1fr]">
         <CalendarCard selectedDay={selectedDay} onSelectDay={setSelectedDay} hasAppointments={hasAppointmentsOn} />
 
         <div className="flex min-w-0 flex-col gap-4">
           <FilterPanel
-            searchValue={searchQuery}
-            onSearchChange={setSearchQuery}
             statusOptions={statusOptions}
             visitTypeOptions={visitTypeOptions}
             testTypeOptions={testTypeOptions}
@@ -258,9 +300,11 @@ export function AppointmentsPage() {
                   <p className={`text-sm font-medium ${loadError ? 'text-error' : 'text-text-secondary'}`}>
                     {loadError
                       ? 'Could not load appointments.'
-                      : hasFilters
-                        ? 'No appointments match your search/filters.'
-                        : 'No appointments for this date.'}
+                      : selectedDay === null
+                        ? 'Select a date from the calendar to view appointments.'
+                        : hasFilters
+                          ? 'No appointments match your search/filters.'
+                          : 'No appointments for this date.'}
                   </p>
                   {!loadError && hasFilters && (
                     <p className="text-xs text-text-tertiary">Try adjusting or clearing your filters.</p>
@@ -278,7 +322,11 @@ export function AppointmentsPage() {
       </div>
 
       {selectedAppointment && (
-        <AppointmentDetailModal item={selectedAppointment} onClose={() => setSelectedAppointment(null)} />
+        <AppointmentDetailModal
+          item={selectedAppointment}
+          onClose={() => setSelectedAppointment(null)}
+          onUploaded={() => void loadAppointments()}
+        />
       )}
     </div>
   );

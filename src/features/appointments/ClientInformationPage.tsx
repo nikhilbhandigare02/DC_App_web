@@ -1,8 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getAppointmentDetailsById } from '../../api/appointmentApi';
-import { getClientPhotoDropdown, getDCReportDropdown, getIdProofDropdown, updateReportRemark, uploadReportDocument } from '../../api/reportUploadApi';
+import {
+  filterDocumentsByCaseAppointment,
+  getClientPhotoDropdown,
+  getDCReportDropdown,
+  getIdProofDropdown,
+  getReportUploadViewDocuments,
+  updateReportDocument,
+  updateReportRemark,
+  uploadedReportId,
+  uploadReportDocument,
+} from '../../api/reportUploadApi';
+import { flattenProfileEnvelope } from '../../api/profileApi';
+import { getUserData } from '../../lib/storage';
+import { pick } from '../../utils/pick';
+import type { ReportUploadDocument } from '../../types/report';
 import type { DdlOptionModel } from '../../types/ddl';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
@@ -14,7 +27,9 @@ import { toast } from '../../lib/toast';
 import { DocumentPreviewModal } from '../../components/ui/DocumentPreviewModal';
 import { IconBadge, IconFileUp, IconInfo } from '../../components/icons';
 import type { IconProps } from '../../components/icons';
+import { AddTypeMenu } from './components/AddTypeMenu';
 import { DocumentStatusTable, type DocFileEntry } from './components/DocumentStatusTable';
+import { useGeoDocumentPicker } from './useGeoDocumentPicker';
 import { formatDate, formatDobValue, mapAppointmentDetailsToModels, type AppointmentUIModel } from './types';
 import type { ComponentType } from 'react';
 
@@ -90,105 +105,6 @@ function SectionHeading({
       </span>
       <h2 className="text-[13px] font-semibold text-text-primary">{children}</h2>
     </div>
-  );
-}
-
-/**
- * "+ Add {label}" pill that opens a small checklist popover — the trigger
- * for picking which ID Proof / Client Photo types show a row in the table
- * below. Closes on an outside click, same pattern as `HomeLayout`'s avatar
- * menu.
- *
- * The panel is portaled to `document.body` and positioned with `fixed`
- * coordinates measured from the button — `Card` (its natural parent here)
- * sets `overflow-hidden` for its rounded corners, which would otherwise clip
- * the panel wherever it crosses the card's edge into the next section.
- */
-function AddTypeMenu({
-  label,
-  options,
-  selected,
-  onToggle,
-}: {
-  label: string;
-  options: string[];
-  selected: Set<string>;
-  onToggle: (option: string, checked: boolean) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-
-  function toggleOpen() {
-    if (!open && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPosition({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
-    }
-    setOpen((o) => !o);
-  }
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node;
-      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
-      setOpen(false);
-    }
-    // Capture-phase scroll listener: closes the panel instead of leaving it
-    // misaligned with the button once anything under it scrolls, since a
-    // `fixed`-positioned panel doesn't move along with page content.
-    function handleScroll() {
-      setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleScroll, true);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-    };
-  }, [open]);
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={toggleOpen}
-        className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-accent/40 px-3 py-1.5 text-[12.5px] font-semibold text-accent-dark transition-colors hover:bg-accent-pale/40"
-      >
-        + Add {label}
-      </button>
-      {open && position
-        ? createPortal(
-            <div
-              ref={panelRef}
-              style={{ top: position.top, right: position.right }}
-              className="fixed z-[200] max-h-64 w-56 overflow-y-auto rounded-lg border border-divider bg-surface p-1.5 shadow-lg"
-            >
-              {options.length === 0 ? (
-                <p className="px-2 py-1.5 text-xs text-text-tertiary">No options available.</p>
-              ) : (
-                options.map((option) => (
-                  <label
-                    key={option}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-variant"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(option)}
-                      onChange={(e) => onToggle(option, e.target.checked)}
-                      className="h-3.5 w-3.5 shrink-0 rounded border-divider text-primary accent-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                    <span className="text-[13px] text-text-primary">{option}</span>
-                  </label>
-                ))
-              )}
-            </div>,
-            document.body,
-          )
-        : null}
-    </>
   );
 }
 
@@ -397,6 +313,15 @@ export function ClientInformationPage() {
 
   const [previewLabel, setPreviewLabel] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  /** Types whose document already exists on the server — pre-selected and locked in the "+ Add" pickers. */
+  const [existingIdProofs, setExistingIdProofs] = useState<Set<string>>(new Set());
+  const [existingClientPhotos, setExistingClientPhotos] = useState<Set<string>>(new Set());
+  /** How many of the three dropdown lookups have finished (success or not) — existing documents are matched to them afterwards. */
+  const [optionsSettled, setOptionsSettled] = useState(0);
+
+  const { pickClientPhoto, pickIdProof, pickerUi } = useGeoDocumentPicker();
 
   useEffect(() => {
     const appointmentId = Number(appointmentIdParam);
@@ -428,7 +353,8 @@ export function ClientInformationPage() {
       })
       .catch(() => {
         // Keep the static fallback.
-      });
+      })
+      .finally(() => setOptionsSettled((n) => n + 1));
     getClientPhotoDropdown()
       .then((options) => {
         if (cancelled) return;
@@ -437,7 +363,8 @@ export function ClientInformationPage() {
       })
       .catch(() => {
         // Keep the static fallback.
-      });
+      })
+      .finally(() => setOptionsSettled((n) => n + 1));
     getDCReportDropdown()
       .then((options) => {
         if (cancelled) return;
@@ -449,11 +376,93 @@ export function ClientInformationPage() {
         const message = err instanceof Error ? err.message : 'Report type options are not available right now.';
         setReportTypeLoadError(message);
         toast.error(message);
-      });
+      })
+      .finally(() => setOptionsSettled((n) => n + 1));
     return () => {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Once the type lists are in, read the documents already uploaded for this
+   * appointment (`GetReportUploadViewDocument`) and pre-fill each matching
+   * type as "Uploaded" — so it shows View/Edit instead of Select File/Upload,
+   * and stays selected in the "+ Add" picker.
+   */
+  useEffect(() => {
+    if (optionsSettled < 3) return;
+    const caseId = Number(caseIdParam);
+    const appointmentId = Number(appointmentIdParam);
+    if (!Number.isFinite(caseId) || !Number.isFinite(appointmentId)) return;
+    let cancelled = false;
+
+    async function loadExisting() {
+      try {
+        const cached = (getUserData() ?? {}) as Record<string, unknown>;
+        const cachedRow = flattenProfileEnvelope(cached);
+        const dcProviderId = pick(cachedRow, 'ProviderNumber', 'providerNumber', 'provider_number') ?? '';
+        if (!dcProviderId) return;
+        const all = await getReportUploadViewDocuments(String(dcProviderId));
+        if (cancelled) return;
+        const documents = filterDocumentsByCaseAppointment(all, caseId, appointmentId);
+        if (documents.length === 0) return;
+
+        const matchLabel = (ids: Record<string, number>, options: string[], doc: ReportUploadDocument): string | null => {
+          const id = doc.documentTypeId;
+          if (id) {
+            const byId = Object.entries(ids).find(([, value]) => value === id);
+            if (byId) return byId[0];
+          }
+          const name = (doc.documentType ?? '').trim().toLowerCase();
+          return name ? (options.find((o) => o.trim().toLowerCase() === name) ?? null) : null;
+        };
+        const entryOf = (doc: ReportUploadDocument): DocFileEntry => ({
+          // No local bytes for an existing document — the File is just a name placeholder.
+          file: new File([], doc.fileName ?? 'Document'),
+          state: 'uploaded',
+          remoteUrl: doc.fileWebPath,
+          reportUploadId: doc.reportUploadId,
+        });
+
+        const nextFiles: Record<string, DocFileEntry> = {};
+        const nextReports: Record<string, DocFileEntry[]> = {};
+        const proofs = new Set<string>();
+        const photos = new Set<string>();
+        for (const doc of documents) {
+          const proof = matchLabel(idProofOptionIds, idProofOptions, doc);
+          const photo = matchLabel(clientPhotoOptionIds, clientPhotoOptions, doc);
+          const report = matchLabel(reportTypeOptionIds, reportTypeOptions, doc);
+          if (proof) {
+            nextFiles[proof] ??= entryOf(doc);
+            proofs.add(proof);
+          } else if (photo) {
+            nextFiles[photo] ??= entryOf(doc);
+            photos.add(photo);
+          } else if (report) {
+            (nextReports[report] ??= []).push(entryOf(doc));
+          }
+        }
+
+        setDocFiles((prev) => ({ ...nextFiles, ...prev }));
+        setReportDocFiles((prev) => {
+          const merged = { ...prev };
+          for (const [type, entries] of Object.entries(nextReports)) merged[type] = [...entries, ...(prev[type] ?? [])];
+          return merged;
+        });
+        setExistingIdProofs(proofs);
+        setExistingClientPhotos(photos);
+        setSelectedIdProofs((prev) => new Set([...prev, ...proofs]));
+        setSelectedClientPhotos((prev) => new Set([...prev, ...photos]));
+      } catch {
+        // Fall back to the empty form.
+      }
+    }
+    void loadExisting();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optionsSettled]);
 
   function toOptionIdMap(options: DdlOptionModel[]): Record<string, number> {
     const map: Record<string, number> = {};
@@ -474,7 +483,9 @@ export function ClientInformationPage() {
     documentTypeId?: number;
     documentTypeName?: string;
     remark?: string;
-    onSuccess: () => void;
+    /** The server row of an already-uploaded document — replaces it instead of inserting another. */
+    reportUploadId?: number;
+    onSuccess: (reportUploadId?: number) => void;
     onFailure: () => void;
   }): Promise<boolean> {
     const caseId = Number(item.caseId);
@@ -484,7 +495,20 @@ export function ClientInformationPage() {
       return false;
     }
     try {
-      await uploadReportDocument({
+      if (params.reportUploadId != null) {
+        await updateReportDocument({
+          reportUploadId: params.reportUploadId,
+          caseId,
+          appointmentId,
+          documentTypeId: params.documentTypeId,
+          documentTypeName: params.documentTypeName,
+          icName: item.insuranceCompany,
+          file: params.file,
+        });
+        params.onSuccess(params.reportUploadId);
+        return true;
+      }
+      const response = await uploadReportDocument({
         caseId,
         appointmentId,
         documentTypeId: params.documentTypeId,
@@ -494,7 +518,7 @@ export function ClientInformationPage() {
         remark: params.remark,
         isNew: false,
       });
-      params.onSuccess();
+      params.onSuccess(uploadedReportId(response));
       return true;
     } catch {
       params.onFailure();
@@ -503,10 +527,15 @@ export function ClientInformationPage() {
   }
 
   /** Just stages the chosen file locally — nothing is sent until its row's own "Upload" button is clicked. */
-  async function handlePickDoc(doc: string) {
-    const file = await pickFile();
+  async function handlePickDoc(doc: string, isClientPhoto: boolean) {
+    // Client Photo: camera only. ID Proof: camera, gallery or PDF. Images are geo-tagged.
+    const file = isClientPhoto ? await pickClientPhoto() : await pickIdProof();
     if (!file) return;
-    setDocFiles((prev) => ({ ...prev, [doc]: { file, state: 'pending' } }));
+    setDocFiles((prev) => ({
+      ...prev,
+      // Editing an existing document replaces its row rather than adding another.
+      [doc]: { file, state: 'pending', reportUploadId: prev[doc]?.reportUploadId },
+    }));
     setMissingIdProofs((prev) => {
       if (!prev.has(doc)) return prev;
       const next = new Set(prev);
@@ -521,11 +550,12 @@ export function ClientInformationPage() {
     });
   }
 
-  function setDocFileState(doc: string, state: DocFileEntry['state']) {
+  function setDocFileState(doc: string, state: DocFileEntry['state'], reportUploadId?: number) {
     setDocFiles((prev) => {
       const entry = prev[doc];
       if (!entry) return prev;
-      return { ...prev, [doc]: { ...entry, state } };
+      // A freshly picked file no longer lives at the old remote URL.
+      return { ...prev, [doc]: { ...entry, state, reportUploadId: reportUploadId ?? entry.reportUploadId } };
     });
   }
 
@@ -539,7 +569,8 @@ export function ClientInformationPage() {
       documentTypeId: idProofOptionIds[doc] ?? clientPhotoOptionIds[doc],
       documentTypeName: doc,
       remark: remark.trim(),
-      onSuccess: () => setDocFileState(doc, 'uploaded'),
+      reportUploadId: entry.reportUploadId,
+      onSuccess: (id) => setDocFileState(doc, 'uploaded', id),
       onFailure: () => setDocFileState(doc, 'error'),
     });
     if (ok) {
@@ -549,10 +580,12 @@ export function ClientInformationPage() {
     }
   }
 
-  function setReportFileState(type: string, index: number, state: DocFileEntry['state']) {
+  function setReportFileState(type: string, index: number, state: DocFileEntry['state'], reportUploadId?: number) {
     setReportDocFiles((prev) => ({
       ...prev,
-      [type]: (prev[type] ?? []).map((e, i) => (i === index ? { ...e, state } : e)),
+      [type]: (prev[type] ?? []).map((e, i) =>
+        i === index ? { ...e, state, reportUploadId: reportUploadId ?? e.reportUploadId } : e,
+      ),
     }));
   }
 
@@ -568,7 +601,7 @@ export function ClientInformationPage() {
     setReportDocFiles((prev) => {
       const arr = [...(prev[type] ?? [])];
       const fillsTrailingSlot = index >= arr.length;
-      arr[index] = { file, state: 'pending' };
+      arr[index] = { file, state: 'pending', reportUploadId: arr[index]?.reportUploadId };
       if (fillsTrailingSlot) {
         // That extra slot is now filled — back to showing "Add" instead of an already-open empty slot.
         setOpenReportSlots((open) => {
@@ -598,7 +631,8 @@ export function ClientInformationPage() {
       documentTypeId: reportTypeOptionIds[type],
       documentTypeName: type,
       remark: remark.trim(),
-      onSuccess: () => setReportFileState(type, index, 'uploaded'),
+      reportUploadId: entry.reportUploadId,
+      onSuccess: (id) => setReportFileState(type, index, 'uploaded', id),
       onFailure: () => setReportFileState(type, index, 'error'),
     });
     if (ok) {
@@ -612,7 +646,7 @@ export function ClientInformationPage() {
     setSelectedIdProofs((prev) => {
       const next = new Set(prev);
       if (checked) next.add(option);
-      else next.delete(option);
+      else if (!existingIdProofs.has(option)) next.delete(option);
       if (next.size > 0) setIdProofSelectionError(false);
       return next;
     });
@@ -622,15 +656,17 @@ export function ClientInformationPage() {
     setSelectedClientPhotos((prev) => {
       const next = new Set(prev);
       if (checked) next.add(option);
-      else next.delete(option);
+      else if (!existingClientPhotos.has(option)) next.delete(option);
       if (next.size > 0) setClientPhotoSelectionError(false);
       return next;
     });
   }
 
-  function openPreview(label: string, file: File | undefined) {
+  function openPreview(label: string, entry: DocFileEntry | undefined) {
     setPreviewLabel(label);
-    setPreviewFile(file ?? null);
+    // An already-uploaded document has no local bytes — preview it from its URL.
+    setPreviewFile(entry?.remoteUrl ? null : (entry?.file ?? null));
+    setPreviewUrl(entry?.remoteUrl ?? null);
   }
 
   /**
@@ -751,16 +787,22 @@ export function ClientInformationPage() {
           <div className="min-w-0">
             <div className="mb-2.5 flex items-center justify-between gap-2">
               <h3 className="text-[13px] font-semibold text-text-primary">ID Proof</h3>
-              <AddTypeMenu label="ID Proof" options={idProofOptions} selected={selectedIdProofs} onToggle={toggleIdProof} />
+              <AddTypeMenu
+                label="ID Proof"
+                options={idProofOptions}
+                selected={selectedIdProofs}
+                onToggle={toggleIdProof}
+                locked={existingIdProofs}
+              />
             </div>
             <DocumentStatusTable
               columnLabel="ID Proof"
               docs={idProofOptions.filter((o) => selectedIdProofs.has(o))}
               files={docFiles}
               missingDocs={missingIdProofs}
-              onChooseFile={(doc) => void handlePickDoc(doc)}
+              onChooseFile={(doc) => void handlePickDoc(doc, false)}
               onUpload={(doc) => void handleUploadDoc(doc)}
-              onPreview={(doc) => openPreview(doc, docFiles[doc]?.file)}
+              onPreview={(doc) => openPreview(doc, docFiles[doc])}
               emptyMessage="Select one or more ID Proof types above."
             />
             {idProofSelectionError && (
@@ -776,6 +818,7 @@ export function ClientInformationPage() {
                 options={clientPhotoOptions}
                 selected={selectedClientPhotos}
                 onToggle={toggleClientPhoto}
+                locked={existingClientPhotos}
               />
             </div>
             <DocumentStatusTable
@@ -783,9 +826,9 @@ export function ClientInformationPage() {
               docs={clientPhotoOptions.filter((o) => selectedClientPhotos.has(o))}
               files={docFiles}
               missingDocs={missingClientPhotos}
-              onChooseFile={(doc) => void handlePickDoc(doc)}
+              onChooseFile={(doc) => void handlePickDoc(doc, true)}
               onUpload={(doc) => void handleUploadDoc(doc)}
-              onPreview={(doc) => openPreview(doc, docFiles[doc]?.file)}
+              onPreview={(doc) => openPreview(doc, docFiles[doc])}
               emptyMessage="Select one or more Client Photo types above."
             />
             {clientPhotoSelectionError && (
@@ -817,7 +860,7 @@ export function ClientInformationPage() {
               onAddSlot={(type) => setOpenReportSlots((prev) => new Set(prev).add(type))}
               onChooseFile={(type, index) => void handleChooseReportFile(type, index)}
               onUpload={(type, index) => void handleUploadReportFile(type, index)}
-              onPreview={(type, entry) => openPreview(`${type} — ${entry.file.name}`, entry.file)}
+              onPreview={(type, entry) => openPreview(`${type} — ${entry.file.name}`, entry)}
               emptyMessage="No report types available."
             />
           )}
@@ -861,7 +904,15 @@ export function ClientInformationPage() {
         </div>
       </Card>
 
-      <DocumentPreviewModal label={previewLabel} file={previewFile} onClose={() => setPreviewLabel(null)} />
+      <DocumentPreviewModal
+        label={previewLabel}
+        file={previewFile}
+        imageUrl={previewUrl}
+        openUrl={previewUrl}
+        fileName={previewFile?.name}
+        onClose={() => setPreviewLabel(null)}
+      />
+      {pickerUi}
     </div>
   );
 }

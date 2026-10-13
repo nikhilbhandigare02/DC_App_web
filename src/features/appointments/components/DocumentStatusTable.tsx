@@ -7,6 +7,10 @@ export type DocUploadState = 'pending' | 'uploading' | 'uploaded' | 'error';
 export interface DocFileEntry {
   file: File;
   state: DocUploadState;
+  /** For a document that already exists on the server: where to view it (the `file` is then just a name placeholder). */
+  remoteUrl?: string;
+  /** The server row this file lives in, so "Edit" replaces it instead of adding another. */
+  reportUploadId?: number;
 }
 
 interface DocumentStatusTableProps {
@@ -22,6 +26,11 @@ interface DocumentStatusTableProps {
   missingDocs?: Set<string>;
   /** Shown in place of the table when `docs` is empty (defaults to "No {columnLabel} selected."). */
   emptyMessage?: string;
+  /**
+   * A picked file just stays "Selected" (View / Edit) — there is no per-row
+   * Upload; the caller uploads everything in one go later.
+   */
+  stageOnly?: boolean;
 }
 
 interface DocRow {
@@ -66,6 +75,7 @@ export function DocumentStatusTable({
   onPreview,
   missingDocs,
   emptyMessage,
+  stageOnly = false,
 }: DocumentStatusTableProps) {
   if (docs.length === 0) {
     return <p className="text-xs text-text-tertiary">{emptyMessage ?? `No ${columnLabel} selected.`}</p>;
@@ -120,7 +130,7 @@ export function DocumentStatusTable({
             </div>
           );
         }
-        if (row.entry.state === 'uploaded') {
+        if (row.entry.state === 'uploaded' || (stageOnly && row.entry.state === 'pending')) {
           return (
             <div className="flex justify-end gap-1.5">
               <Button variant="secondary" size="sm" onClick={() => onPreview(row.doc)}>

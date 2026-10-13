@@ -83,4 +83,12 @@ export interface RejectedQcDocument extends ReportUploadDocument {
   /** `false` = failed QC; `true` = passed; `null` = not reviewed. */
   passFailResult?: boolean | null;
   documentDisplayName?: string;
+  /** `report_upload_id` of the DC's re-upload of this document (server-side truth); 0/undefined = not re-uploaded yet. */
+  reuploadedReportUploadId?: number;
+  reuploadedDocumentTypeId?: number;
+  reuploadedTypeName?: string;
+  /** The DC row this rejected document is linked to; with `isNew` it identifies the re-upload that "Edit" updates. */
+  dcReportUploadId?: number;
+  /** `true` when the linked DC row is a re-upload (`is_new = 1`). */
+  isNew?: boolean;
 }

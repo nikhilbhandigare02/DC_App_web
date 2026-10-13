@@ -6,10 +6,8 @@
  * `FacilityDayBothTimesAppliedToAll`/`FacilityDcTimingSaveRequested` events
  * in `facility_event.dart`.
  *
- * There is no dedicated "save DC timing" backend endpoint among the
- * provided APIs — mirroring the Dart bloc (which only validates locally
- * before advancing to the next config sub-tab), "Save" here validates and
- * advances to the Additional sub-tab rather than calling a network request.
+ * "Save & Next" only validates and advances to the Additional sub-tab; the timing is sent later, by the
+ * Facilities tab's "Save & Close" (see `saveFacilityConfiguration`).
  *
  * Rendered as a compact 7-row grid (day | working | start | end | actions)
  * rather than a stacked mobile list.
@@ -22,7 +20,9 @@ import { Checkbox } from '../../../components/ui/Checkbox';
 import { TimePickerField } from '../../../components/ui/TimePickerField';
 import { toast } from '../../../lib/toast';
 import type { DayTimingData } from '../../../types/facility';
-import { WEEKDAYS, timeToMinutes } from '../utils';
+import { WEEKDAYS } from '../utils';
+import { dcTimingError } from '../saveFacilityConfiguration';
+import { parseClockRange, timingFor, weekDayAbbr, type FacilityConfigItem } from '../facilityConfigStore';
 
 const DEFAULT_START = { hour: 9, minute: 0 };
 const DEFAULT_END = { hour: 18, minute: 0 };
@@ -36,11 +36,31 @@ function buildDefaultTimings(days: string[]): DayTimingData[] {
   }));
 }
 
-interface DcTimingSubTabProps {
-  onSaved: () => void;
+/** Working days/times taken from a facility being edited. */
+function timingsFromItem(days: string[], item: FacilityConfigItem): DayTimingData[] {
+  const fallback = parseClockRange(item.timing);
+  return days.map((day) => {
+    const abbr = weekDayAbbr(day);
+    const text = abbr ? timingFor(item, abbr) : null;
+    const range = text ? parseClockRange(text) : null;
+    return {
+      day,
+      isWorking: !!abbr && item.workingDays.includes(abbr),
+      startTime: range?.[0] ?? fallback?.[0] ?? { ...DEFAULT_START },
+      endTime: range?.[1] ?? fallback?.[1] ?? { ...DEFAULT_END },
+    };
+  });
 }
 
-export function DcTimingSubTab({ onSaved }: DcTimingSubTabProps) {
+interface DcTimingSubTabProps {
+  onSaved: (timings: DayTimingData[]) => void;
+  /** Update flow: timings already entered earlier in this flow (kept when returning to this tab). */
+  draft?: DayTimingData[];
+  /** Update flow: the facility to pre-fill from when there's no draft yet. */
+  prefillItem?: FacilityConfigItem;
+}
+
+export function DcTimingSubTab({ onSaved, draft, prefillItem }: DcTimingSubTabProps) {
   const [loading, setLoading] = useState(true);
   const [timings, setTimings] = useState<DayTimingData[]>([]);
 
@@ -50,12 +70,19 @@ export function DcTimingSubTab({ onSaved }: DcTimingSubTabProps) {
       try {
         const days = await getDay();
         const names = days.map((d) => d.name).filter((n): n is string => !!n);
-        if (!cancelled) setTimings(buildDefaultTimings(names.length > 0 ? names : WEEKDAYS));
+        if (!cancelled) {
+          const dayNames = names.length > 0 ? names : WEEKDAYS;
+          const ids: Record<string, number> = {};
+          for (const d of days) if (d.name && d.id != null) ids[d.name] = Number(d.id);
+          const base = draft ?? (prefillItem ? timingsFromItem(dayNames, prefillItem) : buildDefaultTimings(dayNames));
+          // The day id travels with each day, so the final save can send it without loading the days again.
+          setTimings(base.map((t) => ({ ...t, dayId: t.dayId ?? ids[t.day] })));
+        }
       } catch (err) {
         if (!cancelled) {
           const msg = err instanceof Error ? err.message : 'Days are not available right now.';
           toast.error(msg);
-          setTimings(buildDefaultTimings(WEEKDAYS));
+          setTimings(draft ?? (prefillItem ? timingsFromItem(WEEKDAYS, prefillItem) : buildDefaultTimings(WEEKDAYS)));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -78,18 +105,14 @@ export function DcTimingSubTab({ onSaved }: DcTimingSubTabProps) {
     });
   }
 
+  /** Validates and moves on; nothing is sent here. */
   function handleSave() {
-    const workingDays = timings.filter((t) => t.isWorking);
-    if (workingDays.length === 0) {
-      toast.error('Mark at least one working day.');
+    const error = dcTimingError(timings);
+    if (error) {
+      toast.error(error);
       return;
     }
-    const invalidDay = workingDays.find((t) => timeToMinutes(t.endTime) <= timeToMinutes(t.startTime));
-    if (invalidDay) {
-      toast.error(`${invalidDay.day}: End time must be after start time.`);
-      return;
-    }
-    onSaved();
+    onSaved(timings);
   }
 
   if (loading) {

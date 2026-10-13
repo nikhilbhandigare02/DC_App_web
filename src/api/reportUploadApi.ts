@@ -260,9 +260,29 @@ function toDcRejectedCase(row: Record<string, unknown>): DcRejectedCase {
   };
 }
 
-/** Cases QC rejected for the logged-in DC — the backend resolves the DC from the session token, so no filter is sent. */
+/** Cases QC rejected for this DC — filtered by the provider id (`dc_Provider_id`) captured at login, same as the View Report list. */
 export async function getDcRejectedCases(): Promise<DcRejectedCase[]> {
-  const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_DC_REJECTED_CASES_ENDPOINT, {});
+  const cached = (getUserData() ?? {}) as Record<string, unknown>;
+  const keys = [
+    'dc_Provider_id',
+    'Dc_Provider_id',
+    'DcProviderId',
+    'dcProviderId',
+    'DCProviderId',
+    'ProviderNumber',
+    'providerNumber',
+    'provider_number',
+  ];
+  // Value saved at login (e.g. 10033): check the raw payload, then its flattened `data` row.
+  const dcProviderId =
+    pickString(cached, ...keys) || pickString(flattenProfileEnvelope(cached), ...keys);
+  if (!dcProviderId) {
+    throw new Error('Provider ID not found. Please login again.');
+  }
+
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_DC_REJECTED_CASES_ENDPOINT, {
+    dc_Provider_id: String(dcProviderId),
+  });
 
   if (!response || typeof response !== 'object') {
     throw new Error('Could not load the discrepancy list. Please try again.');
@@ -304,6 +324,11 @@ export async function getRejectQcReportList(caseId: number, appointmentId: numbe
         qcRemark: pickString(row, 'qcRemark', 'QCRemark', 'QcRemark') || undefined,
         passFailResult: boolOrUndefined(pick(row, 'passFailResult', 'PassFailResult')) ?? null,
         documentDisplayName: pickString(row, 'documentDisplayName', 'DocumentDisplayName') || undefined,
+        reuploadedReportUploadId: numOrUndefined(pick(row, 'reuploadedReportUploadId', 'ReuploadedReportUploadId')),
+        reuploadedDocumentTypeId: numOrUndefined(pick(row, 'reuploadedDocumentTypeId', 'ReuploadedDocumentTypeId')),
+        reuploadedTypeName: pickString(row, 'reuploadedTypeName', 'ReuploadedTypeName') || undefined,
+        dcReportUploadId: numOrUndefined(pick(row, 'dcReportUploadId', 'DcReportUploadId')),
+        isNew: boolOrUndefined(pick(row, 'isNew', 'IsNew')),
       };
     });
 }

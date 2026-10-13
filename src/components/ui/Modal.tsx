@@ -12,6 +12,8 @@ export interface ModalProps {
   title?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** Small icon buttons rendered in the header, just before the Close button. */
+  headerActions?: ReactNode;
   /** Max width in px. Defaults to 480. */
   width?: number;
 }
@@ -22,7 +24,7 @@ export interface ModalProps {
  * Forms belong in the side `Drawer` instead (see `AddDoctorForm`,
  * `FacilityEntryCard`), never in this centered dialog.
  */
-export function Modal({ open, onClose, title, children, footer, width = 480 }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, headerActions, width = 480 }: ModalProps) {
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
 
@@ -83,6 +85,8 @@ export function Modal({ open, onClose, title, children, footer, width = 480 }: M
         {title ? (
           <div className="flex shrink-0 items-center justify-between border-b border-divider bg-gradient-to-r from-primary-pale/50 via-transparent to-transparent px-5 py-3.5">
             <h2 className="text-[15px] font-semibold text-text-primary">{title}</h2>
+            <div className="flex items-center gap-1">
+            {headerActions}
             <button
               type="button"
               aria-label="Close"
@@ -91,6 +95,7 @@ export function Modal({ open, onClose, title, children, footer, width = 480 }: M
             >
               <IconClose size={16} />
             </button>
+            </div>
           </div>
         ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>

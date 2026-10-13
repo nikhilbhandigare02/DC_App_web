@@ -36,6 +36,11 @@ export interface ProviderDoctorDetail {
   fromDate?: string;
   /** `dd-MM-yyyy`, e.g. `"03-08-2026"`. */
   toDate?: string;
+  /** The request's status text, e.g. "DC Requested". */
+  status?: string;
+  /** The uploaded certificate: its file name, and its full URL. Both are empty when no document was uploaded. */
+  newFileName?: string;
+  newFilePath?: string;
 }
 
 /** Response envelope for `POST api/Empanelment/GetProviderDoctorDetails`. */

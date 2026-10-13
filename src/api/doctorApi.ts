@@ -8,6 +8,8 @@ import type { ProviderDoctorDetail, ProviderDoctorDetailsResponseModel } from '.
 
 export const GET_PROVIDER_DOCTOR_DETAILS_ENDPOINT = 'api/Empanelment/GetProviderDoctorDetails';
 export const SAVE_DOCTOR_DETAILS_ENDPOINT = 'api/Empanelment/SaveDoctorDetails';
+export const SAVE_DOCTOR_UPDATE_REQUEST_ENDPOINT = 'api/Empanelment/SaveDoctorUpdateRequest';
+export const DELETE_DOCTOR_REQUEST_ENDPOINT = 'api/Empanelment/DeleteDoctorRequest';
 
 function numOrUndefined(value: unknown): number | undefined {
   if (value == null || value === '') return undefined;
@@ -35,6 +37,10 @@ function toProviderDoctorDetail(row: Record<string, unknown>): ProviderDoctorDet
     speciality: pickString(row, 'speciality', 'Speciality') || undefined,
     fromDate: pickString(row, 'fromDate', 'FromDate') || undefined,
     toDate: pickString(row, 'toDate', 'ToDate') || undefined,
+    status: pickString(row, 'status', 'Status') || undefined,
+    newFileName: pickString(row, 'newFileName', 'NewFileName') || undefined,
+    // The procedure returns the base URL even when there is no file, so the path only counts with a file name.
+    newFilePath: pickString(row, 'newFileName', 'NewFileName') ? pickString(row, 'newFilePath', 'NewFilePath') || undefined : undefined,
   };
 }
 
@@ -92,4 +98,38 @@ export async function getProviderDoctorDetails(): Promise<ProviderDoctorDetail[]
 /** `data` is arbitrary — the endpoint accepts whatever shape the "Add/Edit Doctor" form builds. */
 export async function saveDoctor(data: Record<string, unknown>): Promise<unknown> {
   return apiPostEncryptedSession(SAVE_DOCTOR_DETAILS_ENDPOINT, data);
+}
+
+/** One doctor, as `SaveDoctorUpdateRequest` takes it (a single object, not a `details` array). */
+export interface DoctorUpdateRequest {
+  empanelmentMastId: number;
+  /** The provider id stored at login. */
+  providerId: number;
+  /** 0 adds a new doctor; an existing doctor's id (`tbl_provider_doctor_details.doctor_id`) edits it. */
+  doctorMastId: number;
+  doctorTypeId: number;
+  doctorName: string;
+  qualification: string;
+  medicalRegistrationNo: string;
+  contactNo: string;
+  speciality: number;
+  fromDate?: string | null;
+  toDate?: string | null;
+}
+
+/**
+ * Insert or update one doctor. `doctorMastId` 0 adds a new doctor directly; an existing id sends the
+ * edit for approval instead of applying it (the backend saves the request, its old/new history and a
+ * pending approval row).
+ */
+export async function saveDoctorUpdateRequest(data: DoctorUpdateRequest): Promise<unknown> {
+  return apiPostEncryptedSession(SAVE_DOCTOR_UPDATE_REQUEST_ENDPOINT, data);
+}
+
+/**
+ * Requests the removal of a doctor. The doctor is not deactivated: the backend only records a row in the
+ * approval table with status 114 (removal requested). `doctorMastId` is the id the doctor list returns.
+ */
+export async function deleteDoctorRequest(params: { empanelmentMastId: number; doctorMastId: number }): Promise<unknown> {
+  return apiPostEncryptedSession(DELETE_DOCTOR_REQUEST_ENDPOINT, params);
 }

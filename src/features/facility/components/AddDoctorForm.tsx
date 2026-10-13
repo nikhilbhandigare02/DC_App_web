@@ -8,17 +8,20 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { getDoctorSpecialization, getDoctorType } from '../../../api/ddlApi';
-import { saveDoctor } from '../../../api/doctorApi';
-import { uploadDocuments } from '../../../api/fileUploadApi';
+import { saveDoctorUpdateRequest } from '../../../api/doctorApi';
+import { saveDoctorRequestDocument } from '../../../api/fileUploadApi';
 import { toast } from '../../../lib/toast';
 import { ApiError } from '../../../lib/apiClient';
+import { pick } from '../../../utils/pick';
 import { Button } from '../../../components/ui/Button';
+import { DocumentPreviewModal } from '../../../components/ui/DocumentPreviewModal';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { IconBadge, IconCalendar, IconFileUp, IconPhone, IconStethoscope, IconUser } from '../../../components/icons';
 import type { ReactNode } from 'react';
 import type { DdlOptionModel } from '../../../types/ddl';
-import { defaultDateInputValue, resolveEmpanelmentMastId } from '../utils';
+import type { ProviderDoctorDetail } from '../../../types/doctor';
+import { defaultDateInputValue, resolveEmpanelmentMastId, resolveProviderId } from '../utils';
 
 // Matches `AddDoctorBloc.doctorCertificateDocumentType`.
 const DOCTOR_CERTIFICATE_DOCUMENT_TYPE = 1;
@@ -38,13 +41,22 @@ function SectionHeading({ tone, icon, children }: { tone: 'primary' | 'accent' |
   );
 }
 
+/** `dd-MM-yyyy` (as `GetProviderDoctorDetails` returns it) -> `yyyy-MM-dd` for a date input; falls back to [fallback]. */
+function toDateInputValue(value: string | undefined, fallback: string): string {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec((value ?? '').trim());
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : fallback;
+}
+
 interface AddDoctorFormProps {
   onClose: () => void;
   onSaved: () => void;
+  /** Open the form pre-filled with this doctor, to update it. */
+  doctor?: ProviderDoctorDetail;
 }
 
-export function AddDoctorForm({ onClose, onSaved }: AddDoctorFormProps) {
+export function AddDoctorForm({ onClose, onSaved, doctor }: AddDoctorFormProps) {
   const today = defaultDateInputValue();
+  const isEditing = doctor?.doctorId != null;
 
   const [doctorTypes, setDoctorTypes] = useState<DdlOptionModel[]>([]);
   const [doctorTypesLoading, setDoctorTypesLoading] = useState(true);
@@ -55,15 +67,17 @@ export function AddDoctorForm({ onClose, onSaved }: AddDoctorFormProps) {
   const [specialtiesError, setSpecialtiesError] = useState<string | null>(null);
 
   const [type, setType] = useState('');
-  const [name, setName] = useState('');
-  const [contactNo, setContactNo] = useState('');
-  const [medicalRegistrationNo, setMedicalRegistrationNo] = useState('');
-  const [qualification, setQualification] = useState('');
+  const [name, setName] = useState(doctor?.doctorName ?? '');
+  const [contactNo, setContactNo] = useState(doctor?.contactNo ?? '');
+  const [medicalRegistrationNo, setMedicalRegistrationNo] = useState(doctor?.medicalRegistrationNo ?? '');
+  const [qualification, setQualification] = useState(doctor?.qualification ?? '');
   const [specialty, setSpecialty] = useState('');
   const [certificate, setCertificate] = useState<File | null>(null);
   const [certificateDragOver, setCertificateDragOver] = useState(false);
-  const [fromDate, setFromDate] = useState(today);
-  const [toDate, setToDate] = useState(today);
+  /** Which certificate is open in the preview: the one already on file, or the one just picked. */
+  const [preview, setPreview] = useState<'previous' | 'new' | null>(null);
+  const [fromDate, setFromDate] = useState(toDateInputValue(doctor?.fromDate, today));
+  const [toDate, setToDate] = useState(toDateInputValue(doctor?.toDate, today));
 
   const [saving, setSaving] = useState(false);
 
@@ -72,7 +86,13 @@ export function AddDoctorForm({ onClose, onSaved }: AddDoctorFormProps) {
     (async () => {
       try {
         const options = await getDoctorType();
-        if (!cancelled) setDoctorTypes(options);
+        if (!cancelled) {
+          setDoctorTypes(options);
+          // Editing: pre-select the doctor's current type by name.
+          const current = (doctor?.doctorType ?? '').trim().toLowerCase();
+          const match = current ? options.find((o) => o.label.trim().toLowerCase() === current) : undefined;
+          if (match) setType((prev) => prev || match.value);
+        }
       } catch (err) {
         if (!cancelled) setDoctorTypesError(err instanceof Error ? err.message : 'Could not load speciality types.');
       } finally {
@@ -89,7 +109,12 @@ export function AddDoctorForm({ onClose, onSaved }: AddDoctorFormProps) {
     (async () => {
       try {
         const options = await getDoctorSpecialization();
-        if (!cancelled) setSpecialties(options);
+        if (!cancelled) {
+          setSpecialties(options);
+          const current = (doctor?.speciality ?? '').trim().toLowerCase();
+          const match = current ? options.find((o) => o.label.trim().toLowerCase() === current) : undefined;
+          if (match) setSpecialty((prev) => prev || match.value);
+        }
       } catch (err) {
         if (!cancelled) setSpecialtiesError(err instanceof Error ? err.message : 'Could not load specialties.');
       } finally {
@@ -132,31 +157,37 @@ export function AddDoctorForm({ onClose, onSaved }: AddDoctorFormProps) {
     setSaving(true);
     try {
       const empanelmentMastId = resolveEmpanelmentMastId();
-      const data = {
-        details: [
-          {
-            empanelmentMastId,
-            doctorMastId: 0,
-            doctorTypeId: Number(type),
-            doctorName: name.trim(),
-            qualification: qualification.trim(),
-            medicalRegistrationNo: medicalRegistrationNo.trim(),
-            contactNo: contactNo.trim(),
-            speciality: Number(specialty),
-            fromDate,
-            toDate,
-          },
-        ],
+      const doctorFields = {
+        empanelmentMastId,
+        // The provider id from the login response we stored.
+        providerId: resolveProviderId(),
+        doctorTypeId: Number(type),
+        doctorName: name.trim(),
+        qualification: qualification.trim(),
+        medicalRegistrationNo: medicalRegistrationNo.trim(),
+        contactNo: contactNo.trim(),
+        speciality: Number(specialty),
+        fromDate,
+        toDate,
       };
 
-      await saveDoctor(data);
+      // One API for both: doctorMastId 0 is a new doctor (a request), an existing id updates that doctor.
+      const saved = (await saveDoctorUpdateRequest({ ...doctorFields, doctorMastId: doctor?.doctorId ?? 0 })) as
+        | Record<string, unknown>
+        | null;
 
       if (certificate) {
         try {
-          await uploadDocuments({
+          // The certificate is saved with the doctor request (old vs new file), keyed by the ids the save returned.
+          await saveDoctorRequestDocument({
             empanelmentMastId,
+            requestId: Number(pick(saved ?? undefined, 'DoctorRequestId', 'doctorRequestId') ?? 0),
+            // The id the save returned: the edited doctor, or (new doctor) the request it inserted.
+            doctorDetailsId: Number(
+              pick(saved ?? undefined, 'DoctorDetailsId', 'doctorDetailsId') ?? doctor?.doctorId ?? 0,
+            ),
+            isNewDoctor: !isEditing,
             documentType: DOCTOR_CERTIFICATE_DOCUMENT_TYPE,
-            isMandatory: false,
             file: certificate,
           });
         } catch {
@@ -166,7 +197,8 @@ export function AddDoctorForm({ onClose, onSaved }: AddDoctorFormProps) {
         }
       }
 
-      toast.success('Doctor saved successfully.');
+      // An edit changes the doctor; a new doctor goes to approval first.
+      toast.success(isEditing ? 'Doctor updated successfully.' : 'Doctor submitted for approval.');
       onSaved();
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Something went wrong.';
@@ -272,6 +304,21 @@ export function AddDoctorForm({ onClose, onSaved }: AddDoctorFormProps) {
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[13px] font-medium text-text-primary">Doctor Certificate</label>
+            {doctor?.newFileName && (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-divider bg-surface px-3 py-2">
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-text-tertiary">Previous document</span>
+                  <span className="block truncate text-[13px] font-medium text-text-primary">{doctor.newFileName}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreview('previous')}
+                  className="shrink-0 text-xs font-semibold text-primary hover:underline"
+                >
+                  View
+                </button>
+              </div>
+            )}
             <label
               onDragOver={(e) => {
                 e.preventDefault();
@@ -309,23 +356,47 @@ export function AddDoctorForm({ onClose, onSaved }: AddDoctorFormProps) {
                 <span className="block truncate text-[13px] font-medium text-text-primary">
                   {certificate ? certificate.name : 'Drag & drop or click to upload'}
                 </span>
-                <span className="block text-xs text-text-tertiary">{certificate ? 'Click to replace' : 'PDF or image, optional'}</span>
+                <span className="block text-xs text-text-tertiary">
+                  {certificate ? 'Click to replace' : doctor?.newFileName ? 'Upload a new document to replace the previous one' : 'PDF or image, optional'}
+                </span>
               </span>
             </label>
+            {certificate && (
+              <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary-pale/40 px-3 py-2">
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-text-tertiary">New document</span>
+                  <span className="block truncate text-[13px] font-medium text-text-primary">{certificate.name}</span>
+                </span>
+                <button type="button" onClick={() => setPreview('new')} className="shrink-0 text-xs font-semibold text-primary hover:underline">
+                  View
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
       </div>
 
+      <DocumentPreviewModal
+        label={preview === 'previous' ? 'Previous document' : preview === 'new' ? 'New document' : null}
+        onClose={() => setPreview(null)}
+        file={preview === 'new' ? certificate : null}
+        imageUrl={preview === 'previous' ? doctor?.newFilePath : null}
+        fileName={preview === 'previous' ? doctor?.newFileName : certificate?.name}
+        openUrl={preview === 'previous' ? doctor?.newFilePath : null}
+      />
+
       <div className="sticky -mx-5 -mb-4 mt-5 flex items-center justify-end gap-2 border-t border-divider bg-gradient-to-r from-surface to-primary-pale/20 px-5 py-3.5">
         <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
           Cancel
         </Button>
-        <Button type="button" variant="secondary" onClick={clear} disabled={saving}>
-          Clear
-        </Button>
+        {!isEditing && (
+          <Button type="button" variant="secondary" onClick={clear} disabled={saving}>
+            Clear
+          </Button>
+        )}
         <Button type="submit" isLoading={saving}>
-          Save Doctor
+          {isEditing ? 'Update Doctor' : 'Save Doctor'}
         </Button>
       </div>
     </form>
