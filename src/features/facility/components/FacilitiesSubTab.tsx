@@ -299,9 +299,31 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
       key: 'actions',
       header: '',
       align: 'right',
-      width: '150px',
+      width: '270px',
       render: (row) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
+          {row.dcPhotoUrl && (
+            <a
+              href={row.dcPhotoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              View photo
+            </a>
+          )}
+          {row.dcVideoUrl && (
+            <a
+              href={row.dcVideoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              View video
+            </a>
+          )}
           <Button size="sm" variant="secondary" onClick={() => setEditingId(row.id)}>
             Edit
           </Button>
