@@ -10,6 +10,8 @@ import { formatDate, mapAppointmentDetailsToModels, type AppointmentUIModel } fr
 interface FieldDef {
   label: string;
   value: string;
+  /** Spans the whole row instead of one grid column — for long values such as Tests. */
+  fullWidth?: boolean;
 }
 
 function fieldsFor(item: AppointmentUIModel): FieldDef[] {
@@ -23,7 +25,7 @@ function fieldsFor(item: AppointmentUIModel): FieldDef[] {
     { label: 'Mobile No.', value: item.mobileNo || '—' },
     { label: 'Insurance', value: item.insuranceCompany || '—' },
     { label: 'Date & Time', value: `${formatDate(item.date)} · ${item.time}` },
-    { label: 'Tests', value: item.test || '—' },
+    { label: 'Tests', value: item.test || '—', fullWidth: true },
   ];
 }
 
@@ -127,9 +129,9 @@ export function AppointmentDetailModal({ item, onClose, onUploaded }: Appointmen
       footer={
         started ? undefined : (
           <>
-            <Button variant="secondary" onClick={onClose}>
+            {/* <Button variant="secondary" onClick={onClose}>
               Missed
-            </Button>
+            </Button> */}
             <Button variant="primary" onClick={handleStart}>
               Start
             </Button>
@@ -154,7 +156,7 @@ export function AppointmentDetailModal({ item, onClose, onUploaded }: Appointmen
         <>
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
             {fieldsFor(current).map((field) => (
-              <div key={field.label}>
+              <div key={field.label} className={field.fullWidth ? 'sm:col-span-2' : undefined}>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">{field.label}</p>
                 <p className="mt-0.5 text-[13px] font-medium text-text-primary">{field.value}</p>
               </div>

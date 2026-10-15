@@ -189,14 +189,6 @@ export function DcDiscrepancyDocumentsPage() {
    * type this is — the same dropdown the report upload form takes its
    * `documentTypeId` from — so the id is never missing.
    */
-  /** "Edit": pick a new file for a document that was already re-uploaded; it replaces that row in the database. */
-  function startEdit(doc: RejectedQcDocument, key: string) {
-    const record = reuploads[key];
-    if (!record) return;
-    reuploadTarget.current = { doc, key, typeId: record.typeId, typeName: record.typeName, mode: 'edit' };
-    fileInputRef.current?.click();
-  }
-
   function startReupload(doc: RejectedQcDocument, key: string) {
     const id = documentTypeIdFor(doc);
     if (id != null) {
@@ -415,9 +407,6 @@ export function DcDiscrepancyDocumentsPage() {
                           <>
                             <Button size="sm" disabled>
                               Re-upload
-                            </Button>
-                            <Button variant="secondary" size="sm" disabled={uploadingKey !== null} onClick={() => startEdit(doc, key)}>
-                              Edit
                             </Button>
                           </>
                         ) : (

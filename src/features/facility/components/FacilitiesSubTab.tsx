@@ -22,6 +22,7 @@ import type { DdlOptionModel } from '../../../types/ddl';
 import type { FacilityEntryData, FacilityMasterCategory, FacilityMasterItem } from '../../../types/facility';
 import { nextLocalId, timeToInputValue } from '../utils';
 import { getFacilityConfigs, loadFacilityConfigs, type FacilityConfigItem } from '../facilityConfigStore';
+import { FacilityDocLinks } from './FacilityDocLinks';
 import { FacilityEntryCard } from './FacilityEntryCard';
 import { FacilityTypePicker } from './FacilityTypePicker';
 import { IconPlus } from './icons';
@@ -302,28 +303,13 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
       width: '270px',
       render: (row) => (
         <div className="flex items-center justify-end gap-2">
-          {row.dcPhotoUrl && (
-            <a
-              href={row.dcPhotoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="text-xs font-semibold text-primary hover:underline"
-            >
-              View photo
-            </a>
-          )}
-          {row.dcVideoUrl && (
-            <a
-              href={row.dcVideoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="text-xs font-semibold text-primary hover:underline"
-            >
-              View video
-            </a>
-          )}
+          <FacilityDocLinks
+            name={row.typeLabel}
+            photoUrl={row.dcPhotoUrl}
+            videoUrl={row.dcVideoUrl}
+            photoName={row.dcPhotoFileName}
+            videoName={row.dcVideoFileName}
+          />
           <Button size="sm" variant="secondary" onClick={() => setEditingId(row.id)}>
             Edit
           </Button>

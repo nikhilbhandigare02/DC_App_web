@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { LoadingOverlay } from '../../../components/ui/LoadingOverlay';
 import { getClientPhotoDropdown, getIdProofDropdown, uploadReportDocument } from '../../../api/reportUploadApi';
 import type { DdlOptionModel } from '../../../types/ddl';
 import { Button } from '../../../components/ui/Button';
@@ -218,6 +219,7 @@ export function StartDocumentsPanel({ item, onBack, onDone }: StartDocumentsPane
 
       <DocumentPreviewModal label={previewLabel} file={previewFile} onClose={() => setPreviewLabel(null)} />
       {pickerUi}
+      {submitting && <LoadingOverlay message="Uploading documents..." />}
     </div>
   );
 }

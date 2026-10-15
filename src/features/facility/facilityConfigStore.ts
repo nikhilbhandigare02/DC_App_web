@@ -112,8 +112,17 @@ export function removeFacilityConfig(id: number) {
 const PROVIDER_DOC_BASE_URL = 'http://103.118.17.144:8077/ProviderDoc/';
 
 function providerDocUrl(path: unknown): string | undefined {
-  const text = (path == null ? '' : String(path)).trim().replace(/\\/g, '/').replace(/^\/+/, '');
-  return text && text !== 'null' ? `${PROVIDER_DOC_BASE_URL}${text}` : undefined;
+  const text = (path == null ? '' : String(path)).trim().replace(/\\/g, '/');
+  if (!text || text === 'null') return undefined;
+  // Already a full URL (some rows store one) — don't prefix the base again.
+  if (/^https?:\/\//i.test(text)) return text;
+  // Encode each segment so names with '#', '%' or non-ASCII characters still resolve.
+  const encoded = text
+    .replace(/^\/+/, '')
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+  return `${PROVIDER_DOC_BASE_URL}${encoded}`;
 }
 
 type Row = Record<string, unknown>;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { documentUrlCandidates, isImageFileName } from '../../utils/files';
+import { documentUrlCandidates, isImageFileName, isVideoFileName } from '../../utils/files';
 import { IconClose, IconMaximize, IconMinimize } from '../icons';
 
 const ZOOM_MIN = 0.5;
@@ -21,6 +21,8 @@ export interface DocumentPreviewModalProps {
   file?: File | null;
   /** An already-uploaded image's remote URL. Falls back to the file card if it fails to load. */
   imageUrl?: string | null;
+  /** An already-uploaded video's remote URL — played inline with controls. */
+  videoUrl?: string | null;
   /** Name shown on the fallback card when there's no [file] (e.g. a remote PDF). */
   fileName?: string | null;
   /** Remote file URL offered as an "Open in new tab" link on the fallback card. */
@@ -38,7 +40,7 @@ export interface DocumentPreviewModalProps {
  * animation elsewhere would clip it to less than the full viewport — see
  * those components' own notes).
  */
-export function DocumentPreviewModal({ label, onClose, file, imageUrl, fileName, openUrl }: DocumentPreviewModalProps) {
+export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl, fileName, openUrl }: DocumentPreviewModalProps) {
   const open = label !== null;
   const [zoom, setZoom] = useState(1);
   const [fullScreen, setFullScreen] = useState(false);
@@ -80,6 +82,13 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, fileName,
   const localIsImage = file ? isImageFileName(file.name) : false;
   const imageSrc = localIsImage ? objectUrl : (candidates[attempt] ?? null);
   const isImage = !!imageSrc;
+  const videoSrc = file
+    ? isVideoFileName(file.name)
+      ? objectUrl
+      : null
+    : videoUrl
+      ? (documentUrlCandidates(videoUrl)[0] ?? videoUrl)
+      : null;
   const displayName = file?.name ?? fileName ?? 'Preview unavailable';
 
   return createPortal(
@@ -145,7 +154,11 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, fileName,
         <div
           className={`overflow-auto bg-surface-variant ${isImage && !fullScreen ? 'h-[60vh]' : 'min-h-0 flex-1'}`}
         >
-          {isImage ? (
+          {videoSrc ? (
+            <div className="flex h-full min-h-56 items-center justify-center p-2">
+              <video src={videoSrc} controls autoPlay className="max-h-full w-full rounded-md bg-black" />
+            </div>
+          ) : isImage ? (
             <div
               className="flex items-center justify-center p-2"
               style={{

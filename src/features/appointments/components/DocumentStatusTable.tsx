@@ -11,6 +11,8 @@ export interface DocFileEntry {
   remoteUrl?: string;
   /** The server row this file lives in, so "Edit" replaces it instead of adding another. */
   reportUploadId?: number;
+  /** "Uploaded" locally only — the file is sent to the server when the page's final Save is pressed. */
+  dirty?: boolean;
 }
 
 interface DocumentStatusTableProps {
@@ -61,7 +63,7 @@ function statusLabel(row: DocRow): string {
  * action that walks Pending -> Uploaded: choosing a file (via the FILE
  * cell's "Select File") enables the ACTION cell's "Upload" button; clicking
  * it uploads that file for real (independent of the page's Save action) and
- * flips status to Uploaded, at which point the action becomes "Edit" —
+ * flips status to Uploaded, at which point only "View" remains. Before upload the row shows View, Edit and Upload;
  * reopening the picker and replacing that row's file in place, same as
  * Report Upload's `ReportUploadTable`. There's no remove.
  * Ported from `_DocumentStatusTable`/`_DocumentRow` (client_information_screen.dart).
@@ -130,7 +132,16 @@ export function DocumentStatusTable({
             </div>
           );
         }
-        if (row.entry.state === 'uploaded' || (stageOnly && row.entry.state === 'pending')) {
+        if (row.entry.state === 'uploaded') {
+          return (
+            <div className="flex justify-end gap-1.5">
+              <Button variant="secondary" size="sm" onClick={() => onPreview(row.doc)}>
+                View
+              </Button>
+            </div>
+          );
+        }
+        if (stageOnly && row.entry.state === 'pending') {
           return (
             <div className="flex justify-end gap-1.5">
               <Button variant="secondary" size="sm" onClick={() => onPreview(row.doc)}>
@@ -144,7 +155,13 @@ export function DocumentStatusTable({
         }
         const uploading = row.entry.state === 'uploading';
         return (
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-1.5">
+            <Button variant="secondary" size="sm" onClick={() => onPreview(row.doc)} disabled={uploading}>
+              View
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => onChooseFile(row.doc)} disabled={uploading}>
+              Edit
+            </Button>
             <Button size="sm" onClick={() => onUpload(row.doc)} disabled={uploading}>
               Upload
             </Button>

@@ -24,6 +24,7 @@ import { usePagination } from '../../utils/usePagination';
 import { deleteFacilityDetails } from '../../api/facilityApi';
 import { toast } from '../../lib/toast';
 import { resolveEmpanelmentMastId } from './utils';
+import { FacilityDocLinks } from './components/FacilityDocLinks';
 import { IconPencil, IconTrash } from './components/icons';
 import {
   ALL_DAYS,
@@ -49,23 +50,16 @@ function SearchIcon() {
   );
 }
 
-/** "View photo" / "View video" for a facility whose DC photo / video is saved (opens it in a new tab). */
+/** "View photo" / "View video" for a facility whose DC photo / video is saved (previewed in-page). */
 function DocLinks({ item }: { item: FacilityConfigItem }) {
-  if (!item.photoUrl && !item.videoUrl) return null;
-  const link = 'text-xs font-semibold text-primary hover:underline';
   return (
-    <span className="flex items-center gap-3">
-      {item.photoUrl && (
-        <a href={item.photoUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={link}>
-          View photo
-        </a>
-      )}
-      {item.videoUrl && (
-        <a href={item.videoUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={link}>
-          View video
-        </a>
-      )}
-    </span>
+    <FacilityDocLinks
+      name={item.name}
+      photoUrl={item.photoUrl}
+      videoUrl={item.videoUrl}
+      photoName={item.photoName}
+      videoName={item.videoName}
+    />
   );
 }
 

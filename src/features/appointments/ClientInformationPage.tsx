@@ -25,6 +25,7 @@ import { Badge, type BadgeTone } from '../../components/ui/Badge';
 import { Table, type TableColumn } from '../../components/ui/Table';
 import { toast } from '../../lib/toast';
 import { DocumentPreviewModal } from '../../components/ui/DocumentPreviewModal';
+import { LoadingOverlay } from '../../components/ui/LoadingOverlay';
 import { IconBadge, IconFileUp, IconInfo } from '../../components/icons';
 import type { IconProps } from '../../components/icons';
 import { AddTypeMenu } from './components/AddTypeMenu';
@@ -137,7 +138,7 @@ function reportSlotLabel(entry: DocFileEntry | undefined, hasError: boolean): st
  * document is added only by clicking that row's "Add" button (rather than a
  * fresh empty slot opening automatically after every pick), which opens one
  * more empty slot until a file is picked into it. There's no delete — a
- * filled slot only offers "Edit" to replace its file. Each row uploads for
+ * filled slot offers "Edit" to replace its file only until it is uploaded. Each row uploads for
  * real the moment its own "Upload" button is clicked (status flips Pending ->
  * Uploading -> Uploaded/Failed there), independent of the page's Save action.
  */
@@ -230,9 +231,6 @@ function ReportUploadTable({
                   + Add
                 </Button>
               )}
-              <Button variant="secondary" size="sm" onClick={() => onChooseFile(row.type, row.index)}>
-                Edit
-              </Button>
             </div>
           );
         }
@@ -322,6 +320,8 @@ export function ClientInformationPage() {
   const [optionsSettled, setOptionsSettled] = useState(0);
 
   const { pickClientPhoto, pickIdProof, pickerUi } = useGeoDocumentPicker();
+  /** True while a document is being sent to the server — drives the blocking loader. */
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
   useEffect(() => {
     const appointmentId = Number(appointmentIdParam);
@@ -474,9 +474,9 @@ export function ClientInformationPage() {
   }
 
   /**
-   * Uploads one staged file, called once per file from `handleSaveAll` once
-   * Save is pressed. Silent on success/failure — `handleSaveAll` aggregates
-   * results across every file and reports them in one toast.
+   * Sends one staged file to the server, called once per file from
+   * `handleSaveAll` once Save is pressed. Silent on success/failure —
+   * `handleSaveAll` aggregates results across every file.
    */
   async function uploadDocument(params: {
     file: File;
@@ -559,25 +559,9 @@ export function ClientInformationPage() {
     });
   }
 
-  /** Uploads one ID Proof/Client Photo row's file for real, independent of the page's Save action. */
-  async function handleUploadDoc(doc: string) {
-    const entry = docFiles[doc];
-    if (!entry) return;
-    setDocFileState(doc, 'uploading');
-    const ok = await uploadDocument({
-      file: entry.file,
-      documentTypeId: idProofOptionIds[doc] ?? clientPhotoOptionIds[doc],
-      documentTypeName: doc,
-      remark: remark.trim(),
-      reportUploadId: entry.reportUploadId,
-      onSuccess: (id) => setDocFileState(doc, 'uploaded', id),
-      onFailure: () => setDocFileState(doc, 'error'),
-    });
-    if (ok) {
-      toast.success(`${doc} document uploaded successfully`);
-    } else {
-      toast.error(`Failed to upload the ${doc} document.`);
-    }
+  /** "Upload" only keeps the ID Proof/Client Photo file locally; the final Save sends it to the server. */
+  function handleUploadDoc(doc: string) {
+    setDocFiles((prev) => (prev[doc] ? { ...prev, [doc]: { ...prev[doc], state: 'uploaded', dirty: true } } : prev));
   }
 
   function setReportFileState(type: string, index: number, state: DocFileEntry['state'], reportUploadId?: number) {
@@ -621,25 +605,12 @@ export function ClientInformationPage() {
     });
   }
 
-  /** Uploads one report row's file for real, independent of the page's Save action. */
-  async function handleUploadReportFile(type: string, index: number) {
-    const entry = reportDocFiles[type]?.[index];
-    if (!entry) return;
-    setReportFileState(type, index, 'uploading');
-    const ok = await uploadDocument({
-      file: entry.file,
-      documentTypeId: reportTypeOptionIds[type],
-      documentTypeName: type,
-      remark: remark.trim(),
-      reportUploadId: entry.reportUploadId,
-      onSuccess: (id) => setReportFileState(type, index, 'uploaded', id),
-      onFailure: () => setReportFileState(type, index, 'error'),
-    });
-    if (ok) {
-      toast.success(`${type} document uploaded successfully`);
-    } else {
-      toast.error(`Failed to upload the ${type} document.`);
-    }
+  /** "Upload" only keeps the report file locally; the final Save sends it to the server. */
+  function handleUploadReportFile(type: string, index: number) {
+    setReportDocFiles((prev) => ({
+      ...prev,
+      [type]: (prev[type] ?? []).map((e, i) => (i === index ? { ...e, state: 'uploaded', dirty: true } : e)),
+    }));
   }
 
   function toggleIdProof(option: string, checked: boolean) {
@@ -727,11 +698,62 @@ export function ClientInformationPage() {
       toast.error('Could not save the remark.');
       return;
     }
+    setIsUploadingDoc(true);
     try {
-      await updateReportRemark(caseId, appointmentId, remark.trim());
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save the remark. Please try again.');
-      return;
+      // Send every document that was only kept locally by its "Upload" button.
+      const failed: string[] = [];
+      const idProofOrPhotoDocs = Object.entries(docFiles).filter(([, entry]) => entry.dirty);
+      for (const [doc, entry] of idProofOrPhotoDocs) {
+        const ok = await uploadDocument({
+          file: entry.file,
+          documentTypeId: idProofOptionIds[doc] ?? clientPhotoOptionIds[doc],
+          documentTypeName: doc,
+          remark: remark.trim(),
+          reportUploadId: entry.reportUploadId,
+          onSuccess: (id) =>
+            setDocFiles((prev) => ({
+              ...prev,
+              [doc]: { ...prev[doc], dirty: false, reportUploadId: id ?? prev[doc].reportUploadId },
+            })),
+          onFailure: () => undefined,
+        });
+        if (!ok) failed.push(doc);
+      }
+      for (const [type, entries] of Object.entries(reportDocFiles)) {
+        for (let index = 0; index < entries.length; index++) {
+          const entry = entries[index];
+          if (!entry.dirty) continue;
+          const ok = await uploadDocument({
+            file: entry.file,
+            documentTypeId: reportTypeOptionIds[type],
+            documentTypeName: type,
+            remark: remark.trim(),
+            reportUploadId: entry.reportUploadId,
+            onSuccess: (id) =>
+              setReportDocFiles((prev) => ({
+                ...prev,
+                [type]: (prev[type] ?? []).map((e, i) =>
+                  i === index ? { ...e, dirty: false, reportUploadId: id ?? e.reportUploadId } : e,
+                ),
+              })),
+            onFailure: () => undefined,
+          });
+          if (!ok) failed.push(type);
+        }
+      }
+      if (failed.length > 0) {
+        toast.error(`Failed to upload: ${failed.join(', ')}. Please try Save again.`);
+        return;
+      }
+
+      try {
+        await updateReportRemark(caseId, appointmentId, remark.trim());
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not save the remark. Please try again.');
+        return;
+      }
+    } finally {
+      setIsUploadingDoc(false);
     }
 
     toast.success('Details saved successfully');
@@ -913,6 +935,7 @@ export function ClientInformationPage() {
         onClose={() => setPreviewLabel(null)}
       />
       {pickerUi}
+      {isUploadingDoc && <LoadingOverlay message="Saving documents..." />}
     </div>
   );
 }

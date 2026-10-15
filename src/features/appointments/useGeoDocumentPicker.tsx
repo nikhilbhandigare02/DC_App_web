@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
+import { LoadingOverlay } from '../../components/ui/LoadingOverlay';
 import { toast } from '../../lib/toast';
 import { GeoTagError, geoTagImage, getCurrentPosition } from '../../utils/geoTag';
 
@@ -157,6 +158,17 @@ export function useGeoDocumentPicker(): {
   pickerUi: ReactNode;
 } {
   const [step, setStep] = useState<Step>(null);
+  /** Message shown in a blocking loader while the location is fetched / the photo is geo-tagged. */
+  const [busyMessage, setBusyMessage] = useState<string | null>(null);
+
+  async function withLoader<T>(message: string, work: () => Promise<T>): Promise<T> {
+    setBusyMessage(message);
+    try {
+      return await work();
+    } finally {
+      setBusyMessage(null);
+    }
+  }
 
   function ask<T>(make: (resolve: (value: T) => void) => Step): Promise<T> {
     return new Promise<T>((resolve) => {
@@ -172,7 +184,7 @@ export function useGeoDocumentPicker(): {
   /** Geo-tags [blob] (shows the reason and returns null when it can't). */
   async function tag(blob: Blob): Promise<File | null> {
     try {
-      return await geoTagImage(blob);
+      return await withLoader('Geo-tagging photo...', () => geoTagImage(blob));
     } catch (err) {
       toast.error(err instanceof GeoTagError ? err.message : 'Could not geo-tag the photo. Please try again.');
       return null;
@@ -181,7 +193,7 @@ export function useGeoDocumentPicker(): {
 
   async function ensureLocation(): Promise<boolean> {
     try {
-      await getCurrentPosition();
+      await withLoader('Getting your location...', () => getCurrentPosition());
       return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not get your location.');
@@ -246,6 +258,7 @@ export function useGeoDocumentPicker(): {
         <CameraCaptureModal onCapture={(blob) => step.resolve(blob)} onCancel={() => step.resolve(null)} />
       )}
       {step?.kind === 'confirm' && <ConfirmPreviewModal file={step.file} onDecide={step.resolve} />}
+      {busyMessage && <LoadingOverlay message={busyMessage} />}
     </>
   );
 
