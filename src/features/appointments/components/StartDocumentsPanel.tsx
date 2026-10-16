@@ -82,7 +82,9 @@ export function StartDocumentsPanel({ item, onBack, onDone }: StartDocumentsPane
   async function handlePick(doc: string, isClientPhoto: boolean) {
     const file = isClientPhoto ? await pickClientPhoto() : await pickIdProof();
     if (!file) return;
+    const isEdit = Boolean(files[doc]);
     setFiles((prev) => ({ ...prev, [doc]: { file, state: 'pending' } }));
+    toast.success(isEdit ? 'File updated successfully' : 'File added successfully');
   }
 
   function setFileState(doc: string, state: DocFileEntry['state']) {
@@ -109,6 +111,7 @@ export function StartDocumentsPanel({ item, onBack, onDone }: StartDocumentsPane
         isNew: false,
       });
       setFileState(doc, 'uploaded');
+      toast.success(`${doc} uploaded successfully`);
       return true;
     } catch {
       setFileState(doc, 'error');

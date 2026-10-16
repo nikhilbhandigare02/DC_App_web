@@ -347,7 +347,6 @@ export function FacilityDoctorsTab() {
           onSaved={() => {
             setShowAddDoctor(false);
             load();
-            toast.success('Doctor list refreshed.');
           }}
         />
       </Drawer>
@@ -362,7 +361,6 @@ export function FacilityDoctorsTab() {
             onSaved={() => {
               setEditingDoctor(null);
               load();
-              toast.success('Doctor list refreshed.');
             }}
           />
         )}

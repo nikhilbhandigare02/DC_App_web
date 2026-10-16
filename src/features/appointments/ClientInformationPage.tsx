@@ -226,6 +226,9 @@ function ReportUploadTable({
         if (row.entry.state === 'uploaded') {
           return (
             <div className="flex justify-end gap-1.5">
+              <Button variant="secondary" size="sm" onClick={() => onPreview(row.type, row.entry!)}>
+                View
+              </Button>
               {isLastRow && (
                 <Button size="sm" onClick={() => onAddSlot(row.type)}>
                   + Add
@@ -531,6 +534,7 @@ export function ClientInformationPage() {
     // Client Photo: camera only. ID Proof: camera, gallery or PDF. Images are geo-tagged.
     const file = isClientPhoto ? await pickClientPhoto() : await pickIdProof();
     if (!file) return;
+    const isEdit = Boolean(docFiles[doc]);
     setDocFiles((prev) => ({
       ...prev,
       // Editing an existing document replaces its row rather than adding another.
@@ -548,29 +552,12 @@ export function ClientInformationPage() {
       next.delete(doc);
       return next;
     });
-  }
-
-  function setDocFileState(doc: string, state: DocFileEntry['state'], reportUploadId?: number) {
-    setDocFiles((prev) => {
-      const entry = prev[doc];
-      if (!entry) return prev;
-      // A freshly picked file no longer lives at the old remote URL.
-      return { ...prev, [doc]: { ...entry, state, reportUploadId: reportUploadId ?? entry.reportUploadId } };
-    });
+    if (isEdit) toast.success('File updated successfully');
   }
 
   /** "Upload" only keeps the ID Proof/Client Photo file locally; the final Save sends it to the server. */
   function handleUploadDoc(doc: string) {
     setDocFiles((prev) => (prev[doc] ? { ...prev, [doc]: { ...prev[doc], state: 'uploaded', dirty: true } } : prev));
-  }
-
-  function setReportFileState(type: string, index: number, state: DocFileEntry['state'], reportUploadId?: number) {
-    setReportDocFiles((prev) => ({
-      ...prev,
-      [type]: (prev[type] ?? []).map((e, i) =>
-        i === index ? { ...e, state, reportUploadId: reportUploadId ?? e.reportUploadId } : e,
-      ),
-    }));
   }
 
   /**
@@ -582,6 +569,7 @@ export function ClientInformationPage() {
   async function handleChooseReportFile(type: string, index: number) {
     const file = await pickFile();
     if (!file) return;
+    const isEdit = Boolean(reportDocFiles[type]?.[index]);
     setReportDocFiles((prev) => {
       const arr = [...(prev[type] ?? [])];
       const fillsTrailingSlot = index >= arr.length;
@@ -603,6 +591,7 @@ export function ClientInformationPage() {
       next.delete(type);
       return next;
     });
+    if (isEdit) toast.success('File updated successfully');
   }
 
   /** "Upload" only keeps the report file locally; the final Save sends it to the server. */
