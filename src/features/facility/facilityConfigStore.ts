@@ -137,6 +137,12 @@ const num = (v: unknown): number | undefined => {
 };
 
 /** The `[key]` row list of a `GetProviderConfigurationDetails` response. */
+/** A timing / Additional row that is already a DC record; rows still from the old tables must be sent again on save. */
+const isDcRecord = (row: Row): boolean => {
+  const flag = row.IsDcRecord ?? row.isDcRecord;
+  return flag === true || flag === 1 || flag === '1' || flag === 'true';
+};
+
 function rowsOf(response: unknown, key: string): Row[] {
   const obj = response && typeof response === 'object' ? (response as Row) : {};
   const list = obj[key] ?? obj[key.charAt(0).toLowerCase() + key.slice(1)];
@@ -257,8 +263,8 @@ async function fetchFacilityConfigs(): Promise<void> {
         status: str(row.Status),
         timingStatus,
         additionalStatus,
-        timingSaved: timingRows.length > 0,
-        additionalSaved: homeVisitRows.length > 0,
+        timingSaved: timingRows.some(isDcRecord),
+        additionalSaved: homeVisitRows.some(isDcRecord),
       };
     });
     setState({ items, loading: false });

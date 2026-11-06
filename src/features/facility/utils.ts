@@ -9,7 +9,23 @@
 import { flattenProfileEnvelope } from '../../api/profileApi';
 import { getUserData } from '../../lib/storage';
 import { pick } from '../../utils/pick';
+import type { BadgeTone } from '../../components/ui/Badge';
 import type { TimeOfDayValue } from '../../types/facility';
+
+/** A request still waiting at "DC Requested" (status 29) cannot be edited or removed until a reviewer acts on it. */
+export function isDcRequestedStatus(statusId?: number | null, status?: string | null): boolean {
+  return statusId === 29 || status?.trim().toLowerCase() === 'dc requested';
+}
+
+/** Badge colour for a request status such as "DC Requested", "Verifier Accepted" or "HOD Rejected". */
+export function statusTone(status: string, statusId?: number | null): BadgeTone {
+  if (statusId === 33 || statusId === 31) return 'error';
+  const key = status.toLowerCase();
+  if (key.includes('reject')) return 'error';
+  if (key.includes('approv') || key.includes('accept') || key.includes('complete')) return 'success';
+  if (key.includes('request') || key.includes('pending') || key.includes('process')) return 'warning';
+  return 'info';
+}
 
 let localIdCounter = 0;
 

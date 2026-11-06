@@ -4,7 +4,6 @@ import { getReportUploadList } from '../../api/reportUploadApi';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
 import { Table, type TableColumn } from '../../components/ui/Table';
-import { Badge, type BadgeTone } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { IconFileUp, IconWarning } from '../../components/icons';
@@ -36,17 +35,6 @@ function toApiDate(value: string): string {
   const [year, month, day] = value.split('-');
   if (!year || !month || !day) return '';
   return `${day}-${month}-${year}`;
-}
-
-function reportStatusTone(status: string): BadgeTone {
-  switch (status) {
-    case 'Needs Correction':
-      return 'error';
-    case 'Report Done':
-      return 'success';
-    default:
-      return 'warning';
-  }
 }
 
 function SearchIcon() {
@@ -191,12 +179,6 @@ export function UploadReportPage() {
       render: (row) => <span className="whitespace-nowrap">{formatDate(row.date, 'dd-MM-yyyy')}</span>,
     },
     { key: 'dcName', header: 'Branch', render: (row) => row.dcName || '—' },
-    {
-      key: 'reportStatus',
-      header: 'Status',
-      sortable: true,
-      render: (row) => <Badge tone={reportStatusTone(row.reportStatus)}>{row.reportStatus}</Badge>,
-    },
     {
       key: 'actions',
       header: '',

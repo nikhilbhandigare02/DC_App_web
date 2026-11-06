@@ -23,7 +23,7 @@ import { Panel } from '../../components/ui/Panel';
 import { usePagination } from '../../utils/usePagination';
 import { deleteFacilityDetails } from '../../api/facilityApi';
 import { toast } from '../../lib/toast';
-import { resolveEmpanelmentMastId } from './utils';
+import { isDcRequestedStatus, resolveEmpanelmentMastId, statusTone } from './utils';
 import { FacilityDocLinks } from './components/FacilityDocLinks';
 import { IconPencil, IconTrash } from './components/icons';
 import {
@@ -87,26 +87,29 @@ function FacilityDetailModal({
       width={520}
       title={item.name}
       headerActions={
-        <>
-          <button
-            type="button"
-            aria-label="Edit"
-            title="Edit"
-            onClick={onEdit}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-primary hover:bg-primary-pale"
-          >
-            <IconPencil size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="Remove"
-            title="Remove"
-            onClick={onRemove}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-error hover:bg-error-pale"
-          >
-            <IconTrash size={15} />
-          </button>
-        </>
+        // No edit / remove while the facility is still "DC Requested".
+        isDcRequestedStatus(item.statusId, item.status) ? undefined : (
+          <>
+            <button
+              type="button"
+              aria-label="Edit"
+              title="Edit"
+              onClick={onEdit}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-primary hover:bg-primary-pale"
+            >
+              <IconPencil size={15} />
+            </button>
+            <button
+              type="button"
+              aria-label="Remove"
+              title="Remove"
+              onClick={onRemove}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-error hover:bg-error-pale"
+            >
+              <IconTrash size={15} />
+            </button>
+          </>
+        )
       }
     >
       <div className="flex flex-wrap gap-2">
@@ -283,12 +286,14 @@ export function FacilityListPage() {
                 key={item.id}
                 role="button"
                 tabIndex={0}
-                // Click opens the form pre-filled from this facility's saved data (by its id).
-                onClick={() => startEdit(item)}
+                // Click opens the form pre-filled from this facility's saved data (by its id); a
+                // "DC Requested" facility opens its read-only details instead.
+                onClick={() => (isDcRequestedStatus(item.statusId, item.status) ? setOpenId(item.id) : startEdit(item))}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    startEdit(item);
+                    if (isDcRequestedStatus(item.statusId, item.status)) setOpenId(item.id);
+                    else startEdit(item);
                   }
                 }}
                 className="cursor-pointer rounded-lg border border-divider bg-surface-variant/40 p-3.5 text-left transition-colors hover:border-primary/30 hover:bg-primary-pale/30"
@@ -296,7 +301,7 @@ export function FacilityListPage() {
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-[14px] font-semibold text-text-primary">{item.name}</p>
                   <div className="flex items-center gap-1.5">
-                    {item.status && <Badge tone={item.statusId === 33 ? 'error' : 'warning'}>{item.status}</Badge>}
+                    {item.status && <Badge tone={statusTone(item.status, item.statusId)}>{item.status}</Badge>}
                     <Badge tone={sourceTone(item.sourceType)}>{item.sourceType}</Badge>
                   </div>
                 </div>

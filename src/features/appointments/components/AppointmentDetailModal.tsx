@@ -4,6 +4,7 @@ import { Modal } from '../../../components/ui/Modal';
 import { Badge, type BadgeTone } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { toast } from '../../../lib/toast';
+import { MissedPanel } from './MissedPanel';
 import { StartDocumentsPanel } from './StartDocumentsPanel';
 import { formatDate, mapAppointmentDetailsToModels, type AppointmentUIModel } from '../types';
 
@@ -65,6 +66,8 @@ export function AppointmentDetailModal({ item, onClose, onUploaded }: Appointmen
   const [isLoading, setIsLoading] = useState(true);
   /** "Start" swaps the dialog's content in place for the Client Photo / ID Proof step. */
   const [started, setStarted] = useState(false);
+  /** "Missed" swaps the content for the Recall / NNR step. */
+  const [missed, setMissed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,11 +130,20 @@ export function AppointmentDetailModal({ item, onClose, onUploaded }: Appointmen
         </div>
       }
       footer={
-        started ? undefined : (
+        started || missed ? undefined : (
           <>
-            {/* <Button variant="secondary" onClick={onClose}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (!current.appointmentId) {
+                  toast.error('This appointment can’t be opened yet — no appointment ID was returned.');
+                  return;
+                }
+                setMissed(true);
+              }}
+            >
               Missed
-            </Button> */}
+            </Button>
             <Button variant="primary" onClick={handleStart}>
               Start
             </Button>
@@ -139,7 +151,16 @@ export function AppointmentDetailModal({ item, onClose, onUploaded }: Appointmen
         )
       }
     >
-      {started ? (
+      {missed ? (
+        <MissedPanel
+          item={current}
+          onBack={() => setMissed(false)}
+          onDone={() => {
+            onUploaded?.();
+            onClose();
+          }}
+        />
+      ) : started ? (
         <StartDocumentsPanel
           item={current}
           onBack={() => setStarted(false)}

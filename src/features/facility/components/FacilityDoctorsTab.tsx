@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { deleteDoctorRequest, getProviderDoctorDetails } from '../../../api/doctorApi';
-import { Badge, type BadgeTone } from '../../../components/ui/Badge';
+import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { IconClose, IconStethoscope, IconWarning } from '../../../components/icons';
 import { Drawer } from '../../../components/ui/Drawer';
@@ -21,7 +21,7 @@ import { toast } from '../../../lib/toast';
 import { PaginationBar } from '../../../components/ui/PaginationBar';
 import { usePagination } from '../../../utils/usePagination';
 import { ApiError } from '../../../lib/apiClient';
-import { resolveEmpanelmentMastId } from '../utils';
+import { isDcRequestedStatus, resolveEmpanelmentMastId, statusTone } from '../utils';
 import { AddDoctorForm } from './AddDoctorForm';
 import { IconPlus, IconTrash } from './icons';
 
@@ -31,15 +31,6 @@ interface DoctorRow {
 }
 
 const AVATAR_TONES = ['bg-primary-pale text-primary', 'bg-info-pale text-info', 'bg-success-pale text-success', 'bg-warning-pale text-warning'];
-
-/** Badge colour for a request status such as "DC Requested", "Approved" or "Rejected". */
-function statusTone(status: string): BadgeTone {
-  const key = status.toLowerCase();
-  if (key.includes('reject')) return 'error';
-  if (key.includes('approv') || key.includes('complete')) return 'success';
-  if (key.includes('request') || key.includes('pending') || key.includes('process')) return 'warning';
-  return 'info';
-}
 
 function avatarTone(seed: string): string {
   let hash = 0;
@@ -204,7 +195,9 @@ export function FacilityDoctorsTab() {
       header: '',
       align: 'right',
       width: '64px',
-      render: (row) => (
+      render: (row) =>
+        // No remove while the request is still "DC Requested".
+        isDcRequestedStatus(null, row.doctor.status) ? null : (
         <button
           type="button"
           onClick={(e) => {
@@ -217,7 +210,7 @@ export function FacilityDoctorsTab() {
         >
           <IconTrash size={15} />
         </button>
-      ),
+        ),
     },
   ];
 
@@ -288,7 +281,8 @@ export function FacilityDoctorsTab() {
           columns={columns}
           data={pageItems}
           rowKey={(row) => row.key}
-          onRowClick={(row) => setEditingDoctor(row.doctor)}
+          // A "DC Requested" doctor cannot be edited.
+          onRowClick={(row) => (isDcRequestedStatus(null, row.doctor.status) ? undefined : setEditingDoctor(row.doctor))}
           isLoading={loading}
           emptyState={
             <div className="flex flex-col items-center gap-2 py-4">

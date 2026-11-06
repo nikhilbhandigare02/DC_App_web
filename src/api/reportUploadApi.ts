@@ -260,6 +260,23 @@ function toDcRejectedCase(row: Record<string, unknown>): DcRejectedCase {
   };
 }
 
+/** The logged-in DC's provider id saved at login (e.g. 10033), or 0 when it isn't there. */
+function storedDcProviderId(): number {
+  const cached = (getUserData() ?? {}) as Record<string, unknown>;
+  const keys = [
+    'dc_Provider_id',
+    'Dc_Provider_id',
+    'DcProviderId',
+    'dcProviderId',
+    'DCProviderId',
+    'ProviderNumber',
+    'providerNumber',
+    'provider_number',
+  ];
+  const value = pickString(cached, ...keys) || pickString(flattenProfileEnvelope(cached), ...keys);
+  return Number(value) || 0;
+}
+
 /** Cases QC rejected for this DC — filtered by the provider id (`dc_Provider_id`) captured at login, same as the View Report list. */
 export async function getDcRejectedCases(): Promise<DcRejectedCase[]> {
   const cached = (getUserData() ?? {}) as Record<string, unknown>;
@@ -353,7 +370,205 @@ export async function updateReportRemark(caseId: number, appointmentId: number, 
   }
 }
 
-export const UPDATE_REPORT_DOCUMENT_ENDPOINT = 'api/ReportUpload/UpdateReportDocument';
+export interface AppointmentTest {
+  id: number;
+  name: string;
+  /** 0 for an individually booked test. */
+  packageId: number;
+}
+
+export const GET_TESTS_BY_APPOINTMENT_ENDPOINT = 'api/Appointment/GetTestsByAppointment';
+
+/** The active tests of one appointment, with the PackageId the follow-up save needs. */
+export async function getTestsByAppointment(appointmentId: number): Promise<AppointmentTest[]> {
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_TESTS_BY_APPOINTMENT_ENDPOINT, {
+    appointmentBookingId: appointmentId,
+  });
+  if (!response || typeof response !== 'object') return [];
+  if (pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not load the tests.');
+  }
+  const data = pick<unknown>(response, 'data', 'Data');
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+    .map((row) => ({
+      id: Number(pick(row, 'id', 'Id')) || 0,
+      name: pickString(row, 'name', 'Name'),
+      packageId: Number(pick(row, 'packageId', 'PackageId')) || 0,
+    }))
+    .filter((t) => t.id > 0);
+}
+
+export interface RecallStatus {
+  statusId: number;
+  subStatusId: number;
+}
+
+export const GET_RECALL_STATUS_ENDPOINT = 'api/Appointment/GetRecallStatus';
+
+/** The Recall Later status and callback sub status ids, looked up in the status tables. */
+export async function getRecallStatus(): Promise<RecallStatus> {
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_RECALL_STATUS_ENDPOINT, {});
+  if (pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not load the recall status.');
+  }
+  const data = pick<Record<string, unknown>>(response, 'data', 'Data');
+  const statusId = Number(data && pick(data, 'statusId', 'StatusId')) || 0;
+  const subStatusId = Number(data && pick(data, 'subStatusId', 'SubStatusId')) || 0;
+  if (statusId <= 0 || subStatusId <= 0) throw new Error('Recall status not found.');
+  return { statusId, subStatusId };
+}
+
+export const SAVE_FOLLOW_UP_ENDPOINT ='api/Appointment/SaveFollowUpCaseDetails';
+
+export interface MissedStatusRow {
+  statusId: number;
+  statusName: string;
+  subStatusId: number;
+  subStatusName: string;
+}
+
+export const GET_MISSED_STATUSES_ENDPOINT = 'api/Appointment/GetMissedStatuses';
+
+/** Recall Later (9) and Non Contactable (10) rows with their sub statuses, from the status tables. */
+export async function getMissedStatuses(): Promise<MissedStatusRow[]> {
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_MISSED_STATUSES_ENDPOINT, {});
+  if (pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not load the statuses.');
+  }
+  const data = pick<unknown>(response, 'data', 'Data');
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+    .map((row) => ({
+      statusId: Number(pick(row, 'statusId', 'StatusId')) || 0,
+      statusName: pickString(row, 'statusName', 'StatusName'),
+      subStatusId: Number(pick(row, 'subStatusId', 'SubStatusId')) || 0,
+      subStatusName: pickString(row, 'subStatusName', 'SubStatusName'),
+    }))
+    .filter((r) => r.statusId > 0 && r.subStatusId > 0);
+}
+
+/**
+ * "Missed" (No Show, 27/55): the appointment moves to a new status. Recall Later (9)
+ * carries a callback date and time; Non Contactable / NNR (10) is status only —
+ * the same No Show save the Show/No Show follow-up uses.
+ */
+export async function saveMissedAppointment(params: {
+  caseId: number;
+  appointmentId: number;
+  statusId: number;
+  subStatusId: number;
+  remarks?: string;
+  /** yyyy-MM-dd — Recall Later only. */
+  recallDate?: string;
+  /** HH:mm — Recall Later only. */
+  recallTime?: string;
+}): Promise<void> {
+  const { caseId, appointmentId, statusId, subStatusId, remarks, recallDate, recallTime } = params;
+  const isRecall = Boolean(recallDate && recallTime);
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(SAVE_FOLLOW_UP_ENDPOINT, {
+    case_registration_mast_id: caseId,
+    appointmentId,
+    appointment_status: 27,
+    appointment_sub_status: 55,
+    by_whom: 0,
+    visit_type: 0,
+    remarks: remarks ?? '',
+    new_dc_provider_id: storedDcProviderId(),
+    appointment_slot: '',
+    Appointments: [
+      {
+        Status: statusId,
+        SubStatus: subStatusId,
+        CallBack: isRecall ? `${recallDate} ${recallTime}:00` : '',
+        DCProviderId: storedDcProviderId(),
+        VisitType: 0,
+        AppointmentType: 0,
+        ...(isRecall ? { AppointmentDate: recallDate } : {}),
+        AppointmentSlot: '',
+        Remarks: remarks ?? '',
+        PackageTests: [],
+      },
+    ],
+  });
+
+  if (response && typeof response === 'object' && pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not save. Please try again.');
+  }
+}
+
+/**
+ * "Appointment Done" with tests: the ticked tests are the ones completed (Show,
+ * 26/54). When some are left, they go to a new Recall Later (9) appointment with
+ * the callback date and time — same save the Show/No Show follow-up uses.
+ */
+export async function saveShowFollowUp(params: {
+  caseId: number;
+  appointmentId: number;
+  doneTests: AppointmentTest[];
+  remainingTests: AppointmentTest[];
+  /** Recall status ids from `getRecallStatus`; needed when tests remain. */
+  recallStatus?: RecallStatus;
+  /** yyyy-MM-dd */
+  recallDate?: string;
+  /** HH:mm */
+  recallTime?: string;
+}): Promise<void> {
+  const { caseId, appointmentId, doneTests, remainingTests, recallStatus, recallDate, recallTime } = params;
+  if (remainingTests.length > 0 && !recallStatus) throw new Error('Recall status not found.');
+  const dcProviderId = storedDcProviderId();
+  if (remainingTests.length > 0 && dcProviderId <= 0) throw new Error('Provider ID not found. Please login again.');
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(SAVE_FOLLOW_UP_ENDPOINT, {
+    case_registration_mast_id: caseId,
+    appointmentId,
+    appointment_status: 26,
+    appointment_sub_status: 54,
+    by_whom: 0,
+    visit_type: 0,
+    remarks: '',
+    new_dc_provider_id: dcProviderId,
+    appointment_slot: '',
+    selected_test_ids: doneTests.map((t) => t.id).join(','),
+    ...(remainingTests.length > 0
+      ? {
+          Appointments: [
+            {
+              Status: recallStatus?.statusId ?? 0,
+              SubStatus: recallStatus?.subStatusId ?? 0,
+              CallBack: `${recallDate} ${recallTime}:00`,
+              DCProviderId: dcProviderId,
+              VisitType: 0,
+              AppointmentType: 0,
+              AppointmentDate: recallDate,
+              AppointmentSlot: '',
+              PackageTests: remainingTests.map((t) => ({ PackageId: t.packageId, TestId: t.id })),
+            },
+          ],
+        }
+      : {}),
+  });
+
+  if (response && typeof response === 'object' && pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not complete the appointment. Please try again.');
+  }
+}
+
+export const APPOINTMENT_DONE_ENDPOINT = 'api/ReportUpload/AppointmentDone';
+
+/** "Appointment Done": marks the appointment completed, with or without uploaded documents. */
+export async function appointmentDone(appointmentId: number): Promise<void> {
+  const response = await apiPostEncryptedSession<Record<string, unknown>>(APPOINTMENT_DONE_ENDPOINT, {
+    appointmentId,
+  });
+
+  if (response && typeof response === 'object' && pick<boolean>(response, 'success', 'Success') === false) {
+    throw new Error(pickString(response, 'message', 'Message') || 'Could not complete the appointment. Please try again.');
+  }
+}
+
+export const UPDATE_REPORT_DOCUMENT_ENDPOINT ='api/ReportUpload/UpdateReportDocument';
 
 /** The `reportUploadId` of the row `uploadReportDocument` just inserted, or undefined when the response doesn't carry one. */
 export function uploadedReportId(response: unknown): number | undefined {

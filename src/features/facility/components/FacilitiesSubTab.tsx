@@ -20,7 +20,7 @@ import { toast } from '../../../lib/toast';
 import { facilityError } from '../saveFacilityConfiguration';
 import type { DdlOptionModel } from '../../../types/ddl';
 import type { FacilityEntryData, FacilityMasterCategory, FacilityMasterItem } from '../../../types/facility';
-import { nextLocalId, timeToInputValue } from '../utils';
+import { isDcRequestedStatus, nextLocalId, statusTone, timeToInputValue } from '../utils';
 import { getFacilityConfigs, loadFacilityConfigs, type FacilityConfigItem } from '../facilityConfigStore';
 import { FacilityDocLinks } from './FacilityDocLinks';
 import { FacilityEntryCard } from './FacilityEntryCard';
@@ -291,7 +291,7 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
       render: (row) => {
         // The real status of a saved facility (status master, from the latest approval row).
         if (row.status) {
-          return <Badge tone={row.statusId === 33 ? 'error' : 'warning'}>{row.status}</Badge>;
+          return <Badge tone={statusTone(row.status, row.statusId)}>{row.status}</Badge>;
         }
         return <Badge tone="neutral">Not saved yet</Badge>;
       },
@@ -310,19 +310,24 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
             photoName={row.dcPhotoFileName}
             videoName={row.dcVideoFileName}
           />
-          <Button size="sm" variant="secondary" onClick={() => setEditingId(row.id)}>
-            Edit
-          </Button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              removeFacility(row.id);
-            }}
-            className="rounded-md bg-error-pale px-2 py-1 text-xs font-semibold text-error hover:bg-error/10"
-          >
-            Remove
-          </button>
+          {/* No edit / remove while the facility is still "DC Requested". */}
+          {!isDcRequestedStatus(row.statusId, row.status) && (
+            <>
+              <Button size="sm" variant="secondary" onClick={() => setEditingId(row.id)}>
+                Edit
+              </Button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFacility(row.id);
+                }}
+                className="rounded-md bg-error-pale px-2 py-1 text-xs font-semibold text-error hover:bg-error/10"
+              >
+                Remove
+              </button>
+            </>
+          )}
         </div>
       ),
     },
