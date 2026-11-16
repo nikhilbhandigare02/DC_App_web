@@ -21,7 +21,7 @@ import { toast } from '../../../lib/toast';
 import { PaginationBar } from '../../../components/ui/PaginationBar';
 import { usePagination } from '../../../utils/usePagination';
 import { ApiError } from '../../../lib/apiClient';
-import { isDcRequestedStatus, resolveEmpanelmentMastId, statusTone } from '../utils';
+import { isDcRequestedStatus, isRemoveBlockedStatus, resolveEmpanelmentMastId, statusTone } from '../utils';
 import { AddDoctorForm } from './AddDoctorForm';
 import { IconPlus, IconTrash } from './icons';
 
@@ -197,7 +197,7 @@ export function FacilityDoctorsTab() {
       width: '64px',
       render: (row) =>
         // No remove while the request is still "DC Requested".
-        isDcRequestedStatus(null, row.doctor.status) ? null : (
+        isRemoveBlockedStatus(null, row.doctor.status) ? null : (
         <button
           type="button"
           onClick={(e) => {

@@ -19,6 +19,7 @@ import { Select } from '../../../components/ui/Select';
 import { TimePickerField } from '../../../components/ui/TimePickerField';
 import { IconMapPin } from '../../../components/icons';
 import { toast } from '../../../lib/toast';
+import { UPLOAD_RULES, isAcceptedUpload } from '../utils';
 import type { DdlOptionModel } from '../../../types/ddl';
 import type { FacilityEntryData } from '../../../types/facility';
 
@@ -187,9 +188,17 @@ export function FacilityEntryCard({
   }
 
   function handlePhotoFile(file: File | null) {
+    if (file && !isAcceptedUpload(file, UPLOAD_RULES.facilityPhoto.exts)) {
+      toast.error(`DC Photo must be ${UPLOAD_RULES.facilityPhoto.label}.`);
+      return;
+    }
     onChange({ dcPhotoFile: file });
   }
   function handleVideoFile(file: File | null) {
+    if (file && !isAcceptedUpload(file, UPLOAD_RULES.facilityVideo.exts)) {
+      toast.error(`DC Video must be ${UPLOAD_RULES.facilityVideo.label}.`);
+      return;
+    }
     onChange({ dcVideoFile: file });
   }
 
@@ -404,7 +413,7 @@ export function FacilityEntryCard({
             <DropZoneField
               label="DC Photo"
               required
-              accept="image/*"
+              accept={UPLOAD_RULES.facilityPhoto.accept}
               file={facility.dcPhotoFile ?? null}
               storedName={facility.dcPhotoFileName}
               storedUrl={facility.dcPhotoUrl}
@@ -415,7 +424,7 @@ export function FacilityEntryCard({
             />
             <DropZoneField
               label="DC Video"
-              accept="video/*"
+              accept={UPLOAD_RULES.facilityVideo.accept}
               file={facility.dcVideoFile ?? null}
               storedName={facility.dcVideoFileName}
               storedUrl={facility.dcVideoUrl}

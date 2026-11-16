@@ -1,11 +1,54 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { viewDocument } from '../../api/fileUploadApi';
 import { documentUrlCandidates, isImageFileName, isVideoFileName } from '../../utils/files';
 import { IconClose, IconMaximize, IconMinimize } from '../icons';
 
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 4;
 const ZOOM_STEP = 0.25;
+
+const ABSOLUTE_URL = /^(https?:|blob:|data:)/i;
+
+/**
+ * A stored document is either an absolute URL (older report documents, used as is) or a relative key
+ * (`{EmpanelmentMastId}/{year}/{month}/{file}`: the facility doctor certificate, the facility photo / video),
+ * which is read through the API's ViewDocument endpoint as a `blob:` URL. Returns the URL to load, or null
+ * while a key is still being fetched (or could not be fetched).
+ */
+function useStoredDocUrl(raw: string | null | undefined, enabled: boolean): string | null {
+  const [blob, setBlob] = useState<{ raw: string; url: string } | null>(null);
+  const key = raw?.trim() ?? '';
+  const isKey = !!key && !ABSOLUTE_URL.test(key);
+
+  useEffect(() => {
+    if (!enabled || !isKey) return;
+    let cancelled = false;
+    let created: string | null = null;
+    viewDocument(key)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        created = url;
+        setBlob({ raw: key, url });
+      })
+      .catch(() => {
+        if (!cancelled) setBlob(null);
+      });
+    return () => {
+      cancelled = true;
+      if (created) URL.revokeObjectURL(created);
+      // The URL above is revoked, so drop it too: reopening the same key must fetch a fresh one.
+      setBlob(null);
+    };
+  }, [key, isKey, enabled]);
+
+  if (!key) return null;
+  if (!isKey) return key;
+  return enabled && blob?.raw === key ? blob.url : null;
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -46,7 +89,15 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl,
   const [fullScreen, setFullScreen] = useState(false);
   /** Index into the candidate URLs for the remote image; past the end = every candidate failed. */
   const [attempt, setAttempt] = useState(0);
-  const candidates = useMemo(() => documentUrlCandidates(imageUrl), [imageUrl]);
+  const resolvedImage = useStoredDocUrl(imageUrl, open);
+  const resolvedVideo = useStoredDocUrl(videoUrl, open);
+  const ownOpen = useStoredDocUrl(openUrl, open && openUrl !== imageUrl && openUrl !== videoUrl);
+  const resolvedOpen = openUrl === imageUrl ? resolvedImage : openUrl === videoUrl ? resolvedVideo : ownOpen;
+  // A blob: URL is used as is; an absolute URL keeps the fallback list (e.g. the other report folder).
+  const candidates = useMemo(
+    () => (!resolvedImage ? [] : resolvedImage.startsWith('blob:') ? [resolvedImage] : documentUrlCandidates(resolvedImage)),
+    [resolvedImage],
+  );
 
   useEffect(() => {
     if (open) {
@@ -86,9 +137,16 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl,
     ? isVideoFileName(file.name)
       ? objectUrl
       : null
-    : videoUrl
-      ? (documentUrlCandidates(videoUrl)[0] ?? videoUrl)
+    : resolvedVideo
+      ? resolvedVideo.startsWith('blob:')
+        ? resolvedVideo
+        : (documentUrlCandidates(resolvedVideo)[0] ?? resolvedVideo)
       : null;
+  const openHref = resolvedOpen
+    ? resolvedOpen.startsWith('blob:')
+      ? resolvedOpen
+      : (documentUrlCandidates(resolvedOpen)[0] ?? resolvedOpen)
+    : null;
   const displayName = file?.name ?? fileName ?? 'Preview unavailable';
 
   return createPortal(
@@ -184,8 +242,8 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl,
               </svg>
               <p className="truncate text-[12.5px] font-medium text-text-secondary">{displayName}</p>
               {file && <p className="text-[11px] text-text-tertiary">{formatFileSize(file.size)}</p>}
-              {!file && openUrl && (
-                <a href={documentUrlCandidates(openUrl)[0] ?? openUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary hover:underline">
+              {!file && openHref && (
+                <a href={openHref} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary hover:underline">
                   Open in new tab
                 </a>
               )}

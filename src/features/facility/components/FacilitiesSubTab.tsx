@@ -20,7 +20,7 @@ import { toast } from '../../../lib/toast';
 import { facilityError } from '../saveFacilityConfiguration';
 import type { DdlOptionModel } from '../../../types/ddl';
 import type { FacilityEntryData, FacilityMasterCategory, FacilityMasterItem } from '../../../types/facility';
-import { isDcRequestedStatus, nextLocalId, statusTone, timeToInputValue } from '../utils';
+import { isDcRequestedStatus, isRemoveBlockedStatus, nextLocalId, statusTone, timeToInputValue } from '../utils';
 import { getFacilityConfigs, loadFacilityConfigs, type FacilityConfigItem } from '../facilityConfigStore';
 import { FacilityDocLinks } from './FacilityDocLinks';
 import { FacilityEntryCard } from './FacilityEntryCard';
@@ -316,16 +316,18 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
               <Button size="sm" variant="secondary" onClick={() => setEditingId(row.id)}>
                 Edit
               </Button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeFacility(row.id);
-                }}
-                className="rounded-md bg-error-pale px-2 py-1 text-xs font-semibold text-error hover:bg-error/10"
-              >
-                Remove
-              </button>
+              {!isRemoveBlockedStatus(row.statusId, row.status) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeFacility(row.id);
+                  }}
+                  className="rounded-md bg-error-pale px-2 py-1 text-xs font-semibold text-error hover:bg-error/10"
+                >
+                  Remove
+                </button>
+              )}
             </>
           )}
         </div>

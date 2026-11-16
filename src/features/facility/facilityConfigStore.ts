@@ -108,21 +108,17 @@ export function removeFacilityConfig(id: number) {
   setState({ items: state.items.filter((i) => i.id !== id) });
 }
 
-/** Where the facility photos / videos are served from (the API stores a path relative to it). */
-const PROVIDER_DOC_BASE_URL = 'http://103.118.17.144:8077/ProviderDoc/';
-
+/**
+ * The facility photo / video as the preview takes it. The API returns the relative key saved with the
+ * facility (`{EmpanelmentMastId}/{year}/{month}/Facility/{file}`); the preview modal reads it through
+ * `FileUpload/ViewDocument`, so no file-server address is added here. An absolute URL (some older rows
+ * store one) is passed through unchanged.
+ */
 function providerDocUrl(path: unknown): string | undefined {
   const text = (path == null ? '' : String(path)).trim().replace(/\\/g, '/');
-  if (!text || text === 'null') return undefined;
-  // Already a full URL (some rows store one) — don't prefix the base again.
+  if (!text || text === 'null' || text === '-') return undefined;
   if (/^https?:\/\//i.test(text)) return text;
-  // Encode each segment so names with '#', '%' or non-ASCII characters still resolve.
-  const encoded = text
-    .replace(/^\/+/, '')
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/');
-  return `${PROVIDER_DOC_BASE_URL}${encoded}`;
+  return text.replace(/^\/+/, '');
 }
 
 type Row = Record<string, unknown>;

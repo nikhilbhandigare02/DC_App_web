@@ -17,6 +17,12 @@ function numOrUndefined(value: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/** `sp_get_provider_doctor_details_dc` returns '-' for a doctor with no document; that is "no file", not a file. */
+function realFileValue(value: string | undefined | null): string | undefined {
+  const text = (value ?? '').trim();
+  return text && text !== '-' ? text : undefined;
+}
+
 /**
  * Normalizes one raw row into {@link ProviderDoctorDetail}. A plain `as
  * ProviderDoctorDetail` cast on the raw JSON silently leaves every field
@@ -38,9 +44,11 @@ function toProviderDoctorDetail(row: Record<string, unknown>): ProviderDoctorDet
     fromDate: pickString(row, 'fromDate', 'FromDate') || undefined,
     toDate: pickString(row, 'toDate', 'ToDate') || undefined,
     status: pickString(row, 'status', 'Status') || undefined,
-    newFileName: pickString(row, 'newFileName', 'NewFileName') || undefined,
-    // The procedure returns the base URL even when there is no file, so the path only counts with a file name.
-    newFilePath: pickString(row, 'newFileName', 'NewFileName') ? pickString(row, 'newFilePath', 'NewFilePath') || undefined : undefined,
+    newFileName: realFileValue(pickString(row, 'newFileName', 'NewFileName')),
+    // The path only counts together with a file name.
+    newFilePath: realFileValue(pickString(row, 'newFileName', 'NewFileName'))
+      ? realFileValue(pickString(row, 'newFilePath', 'NewFilePath'))
+      : undefined,
   };
 }
 

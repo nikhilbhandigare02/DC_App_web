@@ -1,9 +1,21 @@
 /** Ported from `lib/repository/file_upload_repository.dart`. */
 
-import { apiPostMultipart } from '../lib/apiClient';
+import { apiClient, apiPostMultipart } from '../lib/apiClient';
 
 export const UPLOAD_DOCUMENTS_ENDPOINT = 'api/FileUpload/UploadDocuments';
 export const SAVE_DOCTOR_REQUEST_DOCUMENT_ENDPOINT = 'api/FileUpload/SaveDoctorRequestDocument';
+export const VIEW_DOCUMENT_ENDPOINT = 'api/FileUpload/ViewDocument';
+
+/**
+ * Reads a saved provider document (the facility doctor certificate, the facility photo / video) through the
+ * API and returns a `blob:` URL for it. `path` is the relative key stored in the database
+ * (`{EmpanelmentMastId}/{year}/{month}/{file}`); the API reads the file from its storage and checks the
+ * login token, so no public file-server address is needed. The caller revokes the URL when it is done.
+ */
+export async function viewDocument(path: string): Promise<string> {
+  const response = await apiClient.get<Blob>(VIEW_DOCUMENT_ENDPOINT, { params: { path }, responseType: 'blob' });
+  return URL.createObjectURL(response.data);
+}
 
 export interface UploadDocumentsParams {
   empanelmentMastId: number;

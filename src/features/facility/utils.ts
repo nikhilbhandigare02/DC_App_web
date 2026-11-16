@@ -17,6 +17,29 @@ export function isDcRequestedStatus(statusId?: number | null, status?: string | 
   return statusId === 29 || status?.trim().toLowerCase() === 'dc requested';
 }
 
+/** File types the backend accepts for each facility / doctor upload. */
+export const UPLOAD_RULES = {
+  doctorCertificate: { accept: '.pdf,.jpg,.jpeg,.png', exts: ['pdf', 'jpg', 'jpeg', 'png'], label: 'PDF, JPG or PNG' },
+  facilityPhoto: { accept: '.jpg,.jpeg,.png', exts: ['jpg', 'jpeg', 'png'], label: 'JPG or PNG' },
+  facilityVideo: { accept: '.mp4', exts: ['mp4'], label: 'MP4' },
+} as const;
+
+/** Returns the file when its extension is accepted; otherwise null (the caller shows the error). */
+export function isAcceptedUpload(file: File, exts: readonly string[]): boolean {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  return exts.includes(ext);
+}
+
+/** Remove is hidden while a request is "DC Requested", "Verifier Rejected" or "HOD Rejected". */
+export function isRemoveBlockedStatus(statusId?: number | null, status?: string | null): boolean {
+  return (
+    isDcRequestedStatus(statusId, status) ||
+    statusId === 31 ||
+    statusId === 33 ||
+    (status ?? '').toLowerCase().includes('reject')
+  );
+}
+
 /** Badge colour for a request status such as "DC Requested", "Verifier Accepted" or "HOD Rejected". */
 export function statusTone(status: string, statusId?: number | null): BadgeTone {
   if (statusId === 33 || statusId === 31) return 'error';

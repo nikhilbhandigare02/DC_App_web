@@ -21,7 +21,7 @@ import { IconBadge, IconCalendar, IconFileUp, IconPhone, IconStethoscope, IconUs
 import type { ReactNode } from 'react';
 import type { DdlOptionModel } from '../../../types/ddl';
 import type { ProviderDoctorDetail } from '../../../types/doctor';
-import { defaultDateInputValue, resolveEmpanelmentMastId, resolveProviderId } from '../utils';
+import { UPLOAD_RULES, defaultDateInputValue, isAcceptedUpload, resolveEmpanelmentMastId, resolveProviderId } from '../utils';
 
 // Matches `AddDoctorBloc.doctorCertificateDocumentType`.
 const DOCTOR_CERTIFICATE_DOCUMENT_TYPE = 1;
@@ -73,6 +73,13 @@ export function AddDoctorForm({ onClose, onSaved, doctor }: AddDoctorFormProps) 
   const [qualification, setQualification] = useState(doctor?.qualification ?? '');
   const [specialty, setSpecialty] = useState('');
   const [certificate, setCertificate] = useState<File | null>(null);
+  function pickCertificate(file: File) {
+    if (!isAcceptedUpload(file, UPLOAD_RULES.doctorCertificate.exts)) {
+      toast.error(`Certificate must be ${UPLOAD_RULES.doctorCertificate.label}.`);
+      return;
+    }
+    setCertificate(file);
+  }
   const [certificateDragOver, setCertificateDragOver] = useState(false);
   /** Which certificate is open in the preview: the one already on file, or the one just picked. */
   const [preview, setPreview] = useState<'previous' | 'new' | null>(null);
@@ -329,7 +336,7 @@ export function AddDoctorForm({ onClose, onSaved, doctor }: AddDoctorFormProps) 
                 e.preventDefault();
                 setCertificateDragOver(false);
                 const dropped = e.dataTransfer.files?.[0];
-                if (dropped) setCertificate(dropped);
+                if (dropped) pickCertificate(dropped);
               }}
               className={`flex cursor-pointer items-center gap-3 rounded-md border border-dashed px-4 py-3.5 text-left transition-all duration-200 ${
                 certificateDragOver
@@ -341,9 +348,14 @@ export function AddDoctorForm({ onClose, onSaved, doctor }: AddDoctorFormProps) 
             >
               <input
                 type="file"
-                accept="image/*,.pdf"
+                accept={UPLOAD_RULES.doctorCertificate.accept}
                 className="hidden"
-                onChange={(e) => setCertificate(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  if (f) pickCertificate(f);
+                  else setCertificate(null);
+                  e.target.value = '';
+                }}
               />
               <span
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors duration-200 ${
