@@ -16,7 +16,7 @@ import { DocumentPreviewModal } from '../../components/ui/DocumentPreviewModal';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { PaginationBar } from '../../components/ui/PaginationBar';
 import { toast } from '../../lib/toast';
-import { isImageFileName } from '../../utils/files';
+import { isImageFileName, isPdfFileName } from '../../utils/files';
 import { usePagination } from '../../utils/usePagination';
 import type { RejectedQcDocument } from '../../types/report';
 
@@ -464,6 +464,7 @@ export function DcDiscrepancyDocumentsPage() {
         label={previewDoc ? previewDoc.documentType?.trim() || previewDoc.fileName || 'Document' : null}
         onClose={() => setPreviewDoc(null)}
         imageUrl={previewDoc && isImageFileName(previewDoc.fileName) ? previewDoc.fileWebPath : null}
+        pdfUrl={previewDoc && isPdfFileName(previewDoc.fileName) ? previewDoc.fileWebPath : null}
         fileName={previewDoc?.fileName}
         openUrl={previewDoc?.fileWebPath}
       />

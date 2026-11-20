@@ -33,6 +33,7 @@ function toAppointmentDetail(row: Record<string, unknown>): AppointmentDetail {
     mobileNumber: pickString(row, 'mobileNumber', 'MobileNumber', 'MobileNo', 'mobileNo') || undefined,
     appointmentSlot: pickString(row, 'appointmentSlot', 'AppointmentSlot') || undefined,
     visitType: pickString(row, 'visitType', 'VisitType') || undefined,
+    address: pickString(row, 'address', 'Address') || undefined,
     appointmentStatus: numOrUndefined(pick(row, 'appointmentStatus', 'AppointmentStatus')),
     appointmentStatusName: pickString(row, 'appointmentStatusName', 'AppointmentStatusName') || undefined,
     appointmentSubStatus: numOrUndefined(pick(row, 'appointmentSubStatus', 'AppointmentSubStatus')),
@@ -96,8 +97,12 @@ export async function getAppointmentDetailsByProvider(): Promise<AppointmentDeta
 }
 
 export async function getAppointmentDetailsById(caseId?: number, appointmentId?: number): Promise<AppointmentDetail[]> {
+  // The backend SP matches `case_id = X OR appointment_id = Y`, so sending both returns EVERY open appointment
+  // of the case. When the appointment is known, look up by appointment only so two appointments of one case
+  // stay separate.
+  const hasAppointment = appointmentId != null && Number.isFinite(appointmentId) && appointmentId > 0;
   const response = await apiPostEncryptedSession<Record<string, unknown>>(GET_APPOINTMENT_DETAILS_BY_ID_ENDPOINT, {
-    CaseId: caseId,
+    CaseId: hasAppointment ? null : caseId,
     AppointmentId: appointmentId,
   });
 
@@ -109,5 +114,7 @@ export async function getAppointmentDetailsById(caseId?: number, appointmentId?:
   if (envelope.success === false) {
     throw new Error(envelope.message || 'Could not load appointment details. Please try again.');
   }
-  return envelope.data ?? [];
+  const rows = envelope.data ?? [];
+  // Defensive: never hand back another appointment's row.
+  return hasAppointment ? rows.filter((r) => Number(r.appointmentBookingId) === appointmentId) : rows;
 }

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import ReactCrop, { type PercentCrop, type PixelCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { LoadingOverlay } from '../../components/ui/LoadingOverlay';
@@ -10,6 +12,7 @@ type IdProofSource = 'camera' | 'gallery' | 'pdf';
 type Step =
   | { kind: 'source'; resolve: (source: IdProofSource | null) => void }
   | { kind: 'camera'; resolve: (blob: Blob | null) => void }
+  | { kind: 'crop'; blob: Blob; resolve: (blob: Blob | null) => void }
   | { kind: 'confirm'; file: File; resolve: (keep: boolean) => void }
   | null;
 
@@ -108,6 +111,87 @@ function CameraCaptureModal({ onCapture, onCancel }: { onCapture: (blob: Blob) =
   );
 }
 
+/**
+ * Crop step shown right after a camera capture. Drag the corners / edges to choose the area; "Crop" keeps just that
+ * area, "Use full photo" keeps the whole capture, "Retake" discards it. Resolves the JPEG to use (or null = discard).
+ */
+function CropPhotoModal({ blob, onDone }: { blob: Blob; onDone: (blob: Blob | null) => void }) {
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  const [crop, setCrop] = useState<PercentCrop | undefined>(undefined);
+  const [completed, setCompleted] = useState<PixelCrop | null>(null);
+  const [working, setWorking] = useState(false);
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(blob);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [blob]);
+
+  function applyCrop() {
+    const img = imgRef.current;
+    if (!img || !completed || completed.width < 2 || completed.height < 2) {
+      onDone(blob); // nothing selected: keep the whole photo
+      return;
+    }
+    setWorking(true);
+    // The crop is in displayed pixels; scale it to the photo's real pixels.
+    const scaleX = img.naturalWidth / img.width;
+    const scaleY = img.naturalHeight / img.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(completed.width * scaleX);
+    canvas.height = Math.round(completed.height * scaleY);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      onDone(blob);
+      return;
+    }
+    ctx.drawImage(
+      img,
+      completed.x * scaleX,
+      completed.y * scaleY,
+      completed.width * scaleX,
+      completed.height * scaleY,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+    canvas.toBlob((out) => onDone(out ?? blob), 'image/jpeg', 0.95);
+  }
+
+  return (
+    <Modal
+      open
+      onClose={() => onDone(null)}
+      width={620}
+      title="Crop photo"
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => onDone(null)} disabled={working}>
+            Retake
+          </Button>
+          <Button variant="secondary" onClick={() => onDone(blob)} disabled={working}>
+            Use full photo
+          </Button>
+          <Button onClick={applyCrop} disabled={working || !completed}>
+            Crop
+          </Button>
+        </>
+      }
+    >
+      <div className="flex max-h-[62vh] justify-center overflow-auto rounded-md bg-surface-variant p-2">
+        {url && (
+          <ReactCrop crop={crop} onChange={(_, percent) => setCrop(percent)} onComplete={(px) => setCompleted(px)} keepSelection>
+            <img ref={imgRef} src={url} alt="Captured photo" className="max-h-[56vh] w-auto" />
+          </ReactCrop>
+        )}
+      </div>
+      <p className="mt-2 text-center text-xs text-text-tertiary">Drag on the photo to select the area to keep.</p>
+    </Modal>
+  );
+}
+
 /** "Keep or discard" step shown right after a capture/pick. */
 function ConfirmPreviewModal({ file, onDecide }: { file: File; onDecide: (keep: boolean) => void }) {
   const isImage = file.type.startsWith('image/');
@@ -147,8 +231,8 @@ function ConfirmPreviewModal({ file, onDecide }: { file: File; onDecide: (keep: 
 /**
  * Picking Client Photo / ID Proof files with geo-tagging, the browser version
  * of the mobile app's `GeoDocumentPicker`:
- *  - Client Photo: camera only, geo-tagged.
- *  - ID Proof: camera or gallery (both geo-tagged) or a PDF (can't be tagged).
+ *  - Client Photo: camera only, cropped, then geo-tagged.
+ *  - ID Proof: camera (cropped) or gallery (both geo-tagged) or a PDF (can't be tagged).
  * Every file goes through a "Use / Discard" preview first. Render [pickerUi]
  * once in the component that uses it.
  */
@@ -209,7 +293,10 @@ export function useGeoDocumentPicker(): {
 
   async function captureFromCamera(): Promise<File | null> {
     if (!(await ensureLocation())) return null;
-    const blob = await ask<Blob | null>((resolve) => ({ kind: 'camera', resolve }));
+    const shot = await ask<Blob | null>((resolve) => ({ kind: 'camera', resolve }));
+    if (!shot) return null;
+    // Crop first, so the geo stamp is drawn on the cropped photo. Retake / close = discard the capture.
+    const blob = await ask<Blob | null>((resolve) => ({ kind: 'crop', blob: shot, resolve }));
     return blob ? tag(blob) : null;
   }
 
@@ -257,6 +344,7 @@ export function useGeoDocumentPicker(): {
       {step?.kind === 'camera' && (
         <CameraCaptureModal onCapture={(blob) => step.resolve(blob)} onCancel={() => step.resolve(null)} />
       )}
+      {step?.kind === 'crop' && <CropPhotoModal blob={step.blob} onDone={step.resolve} />}
       {step?.kind === 'confirm' && <ConfirmPreviewModal file={step.file} onDecide={step.resolve} />}
       {busyMessage && <LoadingOverlay message={busyMessage} />}
     </>

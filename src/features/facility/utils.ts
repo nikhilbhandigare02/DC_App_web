@@ -45,6 +45,8 @@ export function statusTone(status: string, statusId?: number | null): BadgeTone 
   if (statusId === 33 || statusId === 31) return 'error';
   const key = status.toLowerCase();
   if (key.includes('reject')) return 'error';
+  // "Pending For Approval" (status 29) is the same state as "DC Requested": it must not fall into the "approv" => success rule.
+  if (statusId === 29 || key.includes('pending')) return 'warning';
   if (key.includes('approv') || key.includes('accept') || key.includes('complete')) return 'success';
   if (key.includes('request') || key.includes('pending') || key.includes('process')) return 'warning';
   return 'info';

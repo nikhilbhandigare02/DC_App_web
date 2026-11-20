@@ -167,9 +167,10 @@ export function FacilityDoctorsTab() {
       key: 'status',
       header: 'Status',
       sortable: true,
-      sortValue: (row) => row.doctor.status ?? '',
+      sortValue: (row) => row.doctor.status || 'HOD Accepted',
       render: (row) =>
-        row.doctor.status ? <Badge tone={statusTone(row.doctor.status)}>{row.doctor.status}</Badge> : <span className="text-text-tertiary">—</span>,
+        // No status at all: default to HOD Accepted.
+        <Badge tone={statusTone(row.doctor.status || 'HOD Accepted')}>{row.doctor.status || 'HOD Accepted'}</Badge>,
     },
     {
       key: 'document',

@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { PaginationBar } from '../../components/ui/PaginationBar';
 import { usePagination } from '../../utils/usePagination';
-import { IconChevronRight } from '../../components/icons';
+import { IconChevronRight, IconWarning } from '../../components/icons';
 import { toast } from '../../lib/toast';
 import type { DcRejectedCase } from '../../types/report';
 
@@ -111,9 +111,12 @@ export function DcDiscrepancyPage() {
         </Card>
       ) : loadError ? (
         <Card>
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <p className="text-sm text-text-secondary">{loadError}</p>
-            <Button variant="secondary" onClick={() => void load()}>
+          <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-error-pale text-error">
+              <IconWarning size={20} />
+            </span>
+            <p className="text-sm font-medium text-error">{loadError}</p>
+            <Button variant="secondary" size="sm" onClick={() => void load()}>
               Retry
             </Button>
           </div>

@@ -18,6 +18,7 @@ interface FieldDef {
 function fieldsFor(item: AppointmentUIModel): FieldDef[] {
   return [
     { label: 'Case ID', value: item.caseId || '—' },
+    { label: 'Appointment ID', value: item.appointmentId || '—' },
     { label: 'Proposal No.', value: item.proposalNo || '—' },
     { label: 'Client Profile', value: item.clientProfile || '—' },
     { label: 'Visit Type', value: item.visitType || '—' },
@@ -27,6 +28,7 @@ function fieldsFor(item: AppointmentUIModel): FieldDef[] {
     { label: 'Insurance', value: item.insuranceCompany || '—' },
     { label: 'Date & Time', value: `${formatDate(item.date)} · ${item.time}` },
     { label: 'Tests', value: item.test || '—', fullWidth: true },
+    ...(item.visitType.includes('Home') && item.address ? [{ label: 'Home Address', value: item.address, fullWidth: true }] : []),
   ];
 }
 

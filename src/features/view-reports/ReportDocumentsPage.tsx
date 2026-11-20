@@ -11,7 +11,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { DocumentPreviewModal } from '../../components/ui/DocumentPreviewModal';
 import { toast } from '../../lib/toast';
-import { isImageFileName } from '../../utils/files';
+import { isImageFileName, isPdfFileName } from '../../utils/files';
 import { usePagination } from '../../utils/usePagination';
 import type { ReportUploadDocument } from '../../types/report';
 
@@ -201,6 +201,7 @@ export function ReportDocumentsPage() {
         label={previewDoc ? previewDoc.documentType?.trim() || previewDoc.fileName || 'Document' : null}
         onClose={() => setPreviewDoc(null)}
         imageUrl={previewDoc && isImageFileName(previewDoc.fileName) ? previewDoc.fileWebPath : null}
+        pdfUrl={previewDoc && isPdfFileName(previewDoc.fileName) ? previewDoc.fileWebPath : null}
         fileName={previewDoc?.fileName}
         openUrl={previewDoc?.fileWebPath}
       />

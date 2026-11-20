@@ -25,6 +25,7 @@ import { Badge, type BadgeTone } from '../../components/ui/Badge';
 import { Table, type TableColumn } from '../../components/ui/Table';
 import { toast } from '../../lib/toast';
 import { DocumentPreviewModal } from '../../components/ui/DocumentPreviewModal';
+import { isPdfFileName } from '../../utils/files';
 import { LoadingOverlay } from '../../components/ui/LoadingOverlay';
 import { IconBadge, IconFileUp, IconInfo } from '../../components/icons';
 import type { IconProps } from '../../components/icons';
@@ -765,6 +766,8 @@ export function ClientInformationPage() {
       { label: 'DC Name', value: item.dcName },
       { label: 'Appointment Date', value: formatDate(item.date, 'dd-MM-yyyy') },
       { label: 'DOB', value: formatDobValue(item.dob) },
+      { label: 'Visit Type', value: item.visitType },
+      ...(item.visitType.includes('Home') && item.address ? [{ label: 'Home Address', value: item.address, fullWidth: true }] : []),
     ],
     [item],
   );
@@ -781,9 +784,9 @@ export function ClientInformationPage() {
         <SectionHeading icon={IconBadge} accent="primary">Appointment Details</SectionHeading>
         <div className="mt-3.5 grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-3">
           {infoFields.map((field) => (
-            <div key={field.label} className="min-w-0">
+            <div key={field.label} className={`min-w-0 ${field.fullWidth ? 'sm:col-span-2 lg:col-span-3' : ''}`}>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">{field.label}</p>
-              <p className={`mt-0.5 truncate text-[13px] font-medium ${field.value ? 'text-text-primary' : 'text-text-tertiary'}`}>
+              <p className={`mt-0.5 text-[13px] font-medium ${field.fullWidth ? 'break-words' : 'truncate'} ${field.value ? 'text-text-primary' : 'text-text-tertiary'}`}>
                 {field.value || '—'}
               </p>
             </div>
@@ -919,6 +922,7 @@ export function ClientInformationPage() {
         label={previewLabel}
         file={previewFile}
         imageUrl={previewUrl}
+        pdfUrl={previewUrl && isPdfFileName(previewUrl) ? previewUrl : null}
         openUrl={previewUrl}
         fileName={previewFile?.name}
         onClose={() => setPreviewLabel(null)}

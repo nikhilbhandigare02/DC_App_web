@@ -181,21 +181,20 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
     { label: 'Home', value: 'Home' },
   ]);
 
-  // Not in the edit flow: list the facilities already saved for this empanelment,
-  // so each can be opened with Edit and its data pre-filled.
+  // Not in the edit flow: facilities already saved for this empanelment are NOT listed here — this tab only shows
+  // what has been added in this session and is not saved yet (the saved ones live on the View facility screen).
+  // The saved list is still loaded so a saved facility type can't be added again, and so "Save & Close" knows it is
+  // only adding to an empanelment that already has saved data.
+  const [savedTypeCodes, setSavedTypeCodes] = useState<Set<string>>(new Set());
+  const hasSavedRef = useRef(false);
   useEffect(() => {
     if (prefillItem) return;
     let cancelled = false;
     void loadFacilityConfigs().then(() => {
       if (cancelled) return;
       const saved = getFacilityConfigs();
-      // Entries added meanwhile keep the tab.
-      setFacilities((prev) => {
-        if (prev.length > 0) return prev;
-        const entries = saved.map(entryFromItem);
-        for (const entry of entries) loadedRef.current.set(entry.id, entry);
-        return entries;
-      });
+      hasSavedRef.current = saved.length > 0;
+      setSavedTypeCodes(new Set(saved.map((item) => entryFromItem(item).typeCode)));
     });
     return () => {
       cancelled = true;
@@ -245,7 +244,7 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
     setFacilities((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   }
 
-  const alreadyAddedTypeCodes = new Set(facilities.map((f) => f.typeCode));
+  const alreadyAddedTypeCodes = new Set([...savedTypeCodes, ...facilities.map((f) => f.typeCode)]);
   const editingFacility = facilities.find((f) => f.id === editingId) ?? null;
 
   const columns: TableColumn<FacilityEntryData>[] = [
@@ -293,7 +292,8 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
         if (row.status) {
           return <Badge tone={statusTone(row.status, row.statusId)}>{row.status}</Badge>;
         }
-        return <Badge tone="neutral">Not saved yet</Badge>;
+        // No status at all: default to HOD Accepted.
+        return <Badge tone="success">HOD Accepted</Badge>;
       },
     },
     {
@@ -338,7 +338,7 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-text-tertiary">Facility types offered by this diagnostic centre.</p>
+        <p className="text-xs text-text-tertiary">Facilities added here are saved when you click Save &amp; Close. Saved facilities are on the View facility screen.</p>
         <Button
           size="sm"
           variant="secondary"
@@ -357,7 +357,7 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
         rowKey={(row) => row.id}
         onRowClick={(row) => setEditingId(row.id)}
         isLoading={masterLoading && facilities.length === 0}
-        emptyState={'No facilities added yet. Use "+ Add more" to get started.'}
+        emptyState={'No new facilities added. Use "+ Add more" to add one.'}
       />
 
       {showPicker && (
@@ -396,7 +396,7 @@ export function FacilitiesSubTab({ prefillItem, onSaveAll, saving = false }: Fac
       </Drawer>
 
       <div className="border-t border-divider pt-4">
-        <Button onClick={() => onSaveAll(facilities.filter((f) => needsSave(f, loadedRef.current)), sourceTypeOptions, visitTypeOptions, !prefillItem && loadedRef.current.size > 0)} isLoading={saving}>
+        <Button onClick={() => onSaveAll(facilities.filter((f) => needsSave(f, loadedRef.current)), sourceTypeOptions, visitTypeOptions, !prefillItem && hasSavedRef.current)} isLoading={saving}>
           Save &amp; Close
         </Button>
       </div>

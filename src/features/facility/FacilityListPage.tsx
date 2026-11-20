@@ -23,7 +23,7 @@ import { Panel } from '../../components/ui/Panel';
 import { usePagination } from '../../utils/usePagination';
 import { deleteFacilityDetails } from '../../api/facilityApi';
 import { toast } from '../../lib/toast';
-import { isDcRequestedStatus, resolveEmpanelmentMastId, statusTone } from './utils';
+import { isDcRequestedStatus, isRemoveBlockedStatus, resolveEmpanelmentMastId, statusTone } from './utils';
 import { FacilityDocLinks } from './components/FacilityDocLinks';
 import { IconPencil, IconTrash } from './components/icons';
 import {
@@ -99,15 +99,17 @@ function FacilityDetailModal({
             >
               <IconPencil size={15} />
             </button>
-            <button
-              type="button"
-              aria-label="Remove"
-              title="Remove"
-              onClick={onRemove}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-error hover:bg-error-pale"
-            >
-              <IconTrash size={15} />
-            </button>
+            {!isRemoveBlockedStatus(item.statusId, item.status) && (
+              <button
+                type="button"
+                aria-label="Remove"
+                title="Remove"
+                onClick={onRemove}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-error hover:bg-error-pale"
+              >
+                <IconTrash size={15} />
+              </button>
+            )}
           </>
         )
       }
@@ -303,6 +305,21 @@ export function FacilityListPage() {
                   <div className="flex items-center gap-1.5">
                     {item.status && <Badge tone={statusTone(item.status, item.statusId)}>{item.status}</Badge>}
                     <Badge tone={sourceTone(item.sourceType)}>{item.sourceType}</Badge>
+                    {/* Same as the doctor list: a remove (request) button, hidden while a request is pending / rejected. */}
+                    {!isRemoveBlockedStatus(item.statusId, item.status) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRemoving(item);
+                        }}
+                        aria-label={`Remove ${item.name}`}
+                        title="Remove"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-error-pale hover:text-error"
+                      >
+                        <IconTrash size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <p className="mt-1 text-[11.5px] text-text-tertiary">
@@ -357,7 +374,7 @@ export function FacilityListPage() {
         open={removing !== null}
         onClose={() => setRemoving(null)}
         width={400}
-        title="Remove facility?"
+        title="Request facility removal?"
         footer={
           <>
             <Button variant="secondary" onClick={() => setRemoving(null)}>
@@ -370,9 +387,9 @@ export function FacilityListPage() {
                 if (!removing) return;
                 setRemoveBusy(true);
                 try {
-                  // A removal request: the facility is made inactive and recorded with an approval row (status 33).
+                  // A removal request (status 33), like the doctor removal: the facility stays in the list until it is approved.
                   await deleteFacilityDetails({ empanelmentMastId: resolveEmpanelmentMastId(), facilityDetailsId: removing.id });
-                  toast.success('Facility removed successfully');
+                  toast.success('Facility removal request submitted for approval.');
                   setRemoving(null);
                   setOpenId(null);
                   await loadFacilityConfigs();
@@ -383,12 +400,14 @@ export function FacilityListPage() {
                 }
               }}
             >
-              Remove
+              Send request
             </Button>
           </>
         }
       >
-        <p className="text-sm text-text-secondary">{removing?.name} will be removed. The removal is recorded for approval.</p>
+        <p className="text-sm text-text-secondary">
+          A removal request for {removing?.name} will be sent for approval. The facility stays in the list until it is approved.
+        </p>
       </Modal>
     </div>
   );

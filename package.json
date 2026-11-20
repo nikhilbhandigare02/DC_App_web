@@ -17,6 +17,7 @@
     "node-forge": "^1.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-image-crop": "^11.0.10",
     "react-router-dom": "^7.18.4",
     "zustand": "^5.0.15"
   },

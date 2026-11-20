@@ -18,8 +18,10 @@ export interface AppointmentUIModel {
   test: string;
   /** Not returned by the API — always `''` (kept for shape parity with the Dart model). */
   testType: string;
-  /** `"DC"` | `"Home"` | `""`. */
+  /** `"Home"` | `"Centre"` | `"Home+Centre Visit"` | `""`. */
   visitType: string;
+  /** Home-visit address; empty unless the visit type includes Home. */
+  address?: string;
   status: string;
   subStatus: string;
   caseId: string;
@@ -37,6 +39,19 @@ export interface AppointmentUIModel {
   /** Only set when `reportStatus === 'Needs Correction'`. */
   correctionRemark: string;
 }
+
+/** Whole years between [dob] (ISO / date string) and today, or 0 when it can't be read. */
+function ageFromDob(dob: string | undefined): number {
+  if (!dob) return 0;
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return 0;
+  const now = new Date();
+  let years = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) years -= 1;
+  return years > 0 && years < 130 ? years : 0;
+}
+
+const VISIT_TYPE_LABELS: Record<string, string> = { '1': 'Home', '2': 'Centre', '3': 'Home+Centre Visit' };
 
 /**
  * Groups `GetAppointmentDetailsByProvider`/`GetAppointmentDetailsById` rows
@@ -78,13 +93,16 @@ export function mapAppointmentDetailsToModels(details: AppointmentDetail[]): App
       proposalNo: first.proposalNo ?? '',
       test: testNames || '-',
       testType: '',
-      visitType: first.visitType === '1' ? 'DC' : first.visitType === '2' ? 'Home' : '',
+      // Same legend as tbl_visit_type_master / the Visit Type dropdown.
+      visitType: VISIT_TYPE_LABELS[first.visitType ?? ''] ?? '',
+      address: first.address?.trim() ?? '',
       status: first.appointmentStatusName ?? 'Pending',
       subStatus: first.appointmentSubStatusName ?? '',
       caseId: first.caseRegistrationMastId != null ? String(first.caseRegistrationMastId) : '',
       clientProfile: 'Normal',
       gender: first.genderName ?? '',
-      age: first.age ?? 0,
+      // The case row may carry no age — derive it from the date of birth when so.
+      age: first.age || ageFromDob(first.dateOfBirth),
       mobileNo: first.mobileNumber ?? '',
       insuranceCompany: first.insuranceCompanyName ?? '',
       dcName: first.providerName ?? '',

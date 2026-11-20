@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { viewDocument } from '../../api/fileUploadApi';
-import { documentUrlCandidates, isImageFileName, isVideoFileName } from '../../utils/files';
+import { documentUrlCandidates, isImageFileName, isPdfFileName, isVideoFileName } from '../../utils/files';
 import { IconClose, IconMaximize, IconMinimize } from '../icons';
 
 const ZOOM_MIN = 0.5;
@@ -66,6 +66,8 @@ export interface DocumentPreviewModalProps {
   imageUrl?: string | null;
   /** An already-uploaded video's remote URL — played inline with controls. */
   videoUrl?: string | null;
+  /** An already-uploaded PDF's remote URL or stored key — rendered inline by the browser's PDF viewer. */
+  pdfUrl?: string | null;
   /** Name shown on the fallback card when there's no [file] (e.g. a remote PDF). */
   fileName?: string | null;
   /** Remote file URL offered as an "Open in new tab" link on the fallback card. */
@@ -83,7 +85,7 @@ export interface DocumentPreviewModalProps {
  * animation elsewhere would clip it to less than the full viewport — see
  * those components' own notes).
  */
-export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl, fileName, openUrl }: DocumentPreviewModalProps) {
+export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl, pdfUrl, fileName, openUrl }: DocumentPreviewModalProps) {
   const open = label !== null;
   const [zoom, setZoom] = useState(1);
   const [fullScreen, setFullScreen] = useState(false);
@@ -91,8 +93,10 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl,
   const [attempt, setAttempt] = useState(0);
   const resolvedImage = useStoredDocUrl(imageUrl, open);
   const resolvedVideo = useStoredDocUrl(videoUrl, open);
-  const ownOpen = useStoredDocUrl(openUrl, open && openUrl !== imageUrl && openUrl !== videoUrl);
-  const resolvedOpen = openUrl === imageUrl ? resolvedImage : openUrl === videoUrl ? resolvedVideo : ownOpen;
+  const resolvedPdf = useStoredDocUrl(pdfUrl, open);
+  const ownOpen = useStoredDocUrl(openUrl, open && openUrl !== imageUrl && openUrl !== videoUrl && openUrl !== pdfUrl);
+  const resolvedOpen =
+    openUrl === imageUrl ? resolvedImage : openUrl === videoUrl ? resolvedVideo : openUrl === pdfUrl ? resolvedPdf : ownOpen;
   // A blob: URL is used as is; an absolute URL keeps the fallback list (e.g. the other report folder).
   const candidates = useMemo(
     () => (!resolvedImage ? [] : resolvedImage.startsWith('blob:') ? [resolvedImage] : documentUrlCandidates(resolvedImage)),
@@ -142,6 +146,15 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl,
         ? resolvedVideo
         : (documentUrlCandidates(resolvedVideo)[0] ?? resolvedVideo)
       : null;
+  const pdfSrc = file
+    ? isPdfFileName(file.name) || file.type === 'application/pdf'
+      ? objectUrl
+      : null
+    : resolvedPdf
+      ? resolvedPdf.startsWith('blob:')
+        ? resolvedPdf
+        : (documentUrlCandidates(resolvedPdf)[0] ?? resolvedPdf)
+      : null;
   const openHref = resolvedOpen
     ? resolvedOpen.startsWith('blob:')
       ? resolvedOpen
@@ -159,7 +172,7 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl,
         role="dialog"
         aria-modal="true"
         className={`flex flex-col overflow-hidden rounded-lg border border-divider bg-surface shadow-xl ${
-          fullScreen ? 'h-[calc(100vh-2rem)] w-[calc(100vw-2rem)]' : 'max-h-[85vh] w-full max-w-[420px]'
+          fullScreen ? 'h-[calc(100vh-2rem)] w-[calc(100vw-2rem)]' : pdfSrc ? 'max-h-[90vh] w-full max-w-[720px]' : 'max-h-[85vh] w-full max-w-[420px]'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -210,9 +223,11 @@ export function DocumentPreviewModal({ label, onClose, file, imageUrl, videoUrl,
         </div>
         {/* An image needs a definite-height viewport so "100%" can mean "fit completely"; zoom then grows/shrinks that fitted box. */}
         <div
-          className={`overflow-auto bg-surface-variant ${isImage && !fullScreen ? 'h-[60vh]' : 'min-h-0 flex-1'}`}
+          className={`overflow-auto bg-surface-variant ${(isImage || pdfSrc) && !fullScreen ? 'h-[60vh]' : 'min-h-0 flex-1'}`}
         >
-          {videoSrc ? (
+          {pdfSrc ? (
+            <iframe src={pdfSrc} title={label ?? 'PDF'} className="h-full w-full border-0 bg-white" />
+          ) : videoSrc ? (
             <div className="flex h-full min-h-56 items-center justify-center p-2">
               <video src={videoSrc} controls autoPlay className="max-h-full w-full rounded-md bg-black" />
             </div>

@@ -144,8 +144,8 @@ export function StartDocumentsPanel({ item, onBack, onDone }: StartDocumentsPane
         file: entry.file,
         isNew: false,
       });
+      // No toast per file: one "Appointment done successfully" is shown at the end.
       setFileState(doc, 'uploaded');
-      toast.success(`${doc} uploaded successfully`);
       return true;
     } catch {
       setFileState(doc, 'error');
@@ -177,24 +177,9 @@ export function StartDocumentsPanel({ item, onBack, onDone }: StartDocumentsPane
   setSubmitting(true);
 
   const selected = [...selectedPhotos, ...selectedProofs];
-  const failed: string[] = [];
 
-  for (const doc of selected) {
-    if (files[doc]?.state === 'uploaded') continue;
-
-    if (!files[doc]) continue;
-
-    if (!(await upload(doc))) {
-      failed.push(doc);
-    }
-  }
-
-  if (failed.length > 0) {
-    setSubmitting(false);
-    toast.error(`Failed to upload: ${failed.join(', ')}.`);
-    return;
-  }
-
+  // 1) Mark the appointment done FIRST. A document upload already moves the appointment to Show, so doing this after
+  // the uploads was rejected with "already marked Show". "Already Show" is not an error here.
   try {
     if (tests.length > 0) {
       await saveShowFollowUp({
@@ -210,13 +195,29 @@ export function StartDocumentsPanel({ item, onBack, onDone }: StartDocumentsPane
       await appointmentDone(Number(item.appointmentId));
     }
   } catch (err) {
-    setSubmitting(false);
-    toast.error(err instanceof Error ? err.message : 'Could not complete the appointment. Please try again.');
-    return;
+    const message = err instanceof Error ? err.message : '';
+    if (!message.toLowerCase().includes('already marked show')) {
+      setSubmitting(false);
+      toast.error(message || 'Could not complete the appointment. Please try again.');
+      return;
+    }
   }
 
+  // 2) Then upload the picked documents (silently; one message at the end).
+  const failed: string[] = [];
+  for (const doc of selected) {
+    if (files[doc]?.state === 'uploaded') continue;
+    if (!files[doc]) continue;
+    if (!(await upload(doc))) failed.push(doc);
+  }
   setSubmitting(false);
-  toast.success('Appointment completed successfully');
+
+  if (failed.length > 0) {
+    // The appointment is done and now sits in Upload Report, where the missing documents can be added.
+    toast.error(`Appointment done, but these could not be uploaded: ${failed.join(', ')}. Upload them from Upload Report.`);
+  } else {
+    toast.success('Appointment done successfully');
+  }
   onDone();
 }
 

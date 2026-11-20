@@ -19,6 +19,8 @@ export interface AppointmentDetail {
   /** `"HH:mm - HH:mm"`, or the literal string `"null"` when not booked yet. */
   appointmentSlot?: string;
   visitType?: string;
+  /** Home-visit address — only filled by the API when the visit type includes Home. */
+  address?: string;
   appointmentStatus?: number;
   appointmentStatusName?: string;
   appointmentSubStatus?: number;

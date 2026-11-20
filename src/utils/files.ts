@@ -3,6 +3,11 @@ export function isImageFileName(fileName: string | null | undefined): boolean {
   return /\.(jpg|jpeg|png)$/i.test(fileName ?? '');
 }
 
+/** Whether [fileName] (or URL) is a PDF the browser can render inline. */
+export function isPdfFileName(fileName: string | null | undefined): boolean {
+  return /\.pdf(\?.*)?$/i.test(fileName ?? '');
+}
+
 /** Whether [fileName] (or URL) is a video the browser can play inline. */
 export function isVideoFileName(fileName: string | null | undefined): boolean {
   return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(fileName ?? '');

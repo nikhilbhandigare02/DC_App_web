@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchProfile, getCachedProfile } from '../../api/profileApi';
+import { getAppointmentDetailsByProvider } from '../../api/appointmentApi';
+import { getDcRejectedCases, getReportUploadList } from '../../api/reportUploadApi';
+import { mapAppointmentDetailsToModels } from '../../features/appointments/types';
 import { toast } from '../../lib/toast';
 import { Card } from '../../components/ui/Card';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -14,6 +17,7 @@ import {
   IconMapPin,
   IconPhone,
   IconUser,
+  IconWarning,
 } from '../../components/icons';
 import type { UserProfileModel } from '../../types/profile';
 import { effectiveDisplayName, initialsOf, orDash, providerCode } from '../../utils/profileDisplay';
@@ -50,6 +54,39 @@ export function Dashboard() {
     };
   }, []);
 
+  // Record counts for the Appointments / Upload Report tiles (null = still loading or unavailable).
+  const [appointmentCount, setAppointmentCount] = useState<number | null>(null);
+  const [reportCount, setReportCount] = useState<number | null>(null);
+  const [discrepancyCount, setDiscrepancyCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAppointmentDetailsByProvider()
+      .then((rows) => {
+        if (!cancelled) setAppointmentCount(mapAppointmentDetailsToModels(rows).length);
+      })
+      .catch(() => {});
+    // pageSize 1: only `totalRecords` is needed, not the rows.
+    getReportUploadList({ pageNumber: 1, pageSize: 1 })
+      .then((res) => {
+        if (!cancelled) setReportCount(res.totalRecords ?? res.data?.length ?? 0);
+      })
+      // No records found (the API may answer with an error/empty result) shows 0.
+      .catch(() => {
+        if (!cancelled) setReportCount(0);
+      });
+    getDcRejectedCases()
+      .then((rows) => {
+        if (!cancelled) setDiscrepancyCount(rows.length);
+      })
+      .catch(() => {
+        if (!cancelled) setDiscrepancyCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (!profile) {
     return loading ? <DashboardSkeleton /> : <DashboardEmptyState />;
   }
@@ -66,7 +103,7 @@ export function Dashboard() {
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             {/* <h2 className="text-sm font-semibold text-text-primary">Quick Links</h2> */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <QuickLinkTile
                 to="/home/profile"
                 icon={<IconUser size={18} />}
@@ -79,6 +116,7 @@ export function Dashboard() {
                 icon={<IconCalendar size={18} />}
                 label="Appointments"
                 description="Schedule & track"
+                count={appointmentCount}
                 accent="accent"
               />
               <QuickLinkTile
@@ -86,7 +124,16 @@ export function Dashboard() {
                 icon={<IconFileUp size={18} />}
                 label="Upload Report"
                 description="Diagnostic records"
+                count={reportCount}
                 accent="gold"
+              />
+              <QuickLinkTile
+                to="/home/dc-discrepancy"
+                icon={<IconWarning size={18} />}
+                label="DC Discrepancy"
+                description="Rejected cases"
+                count={discrepancyCount}
+                accent="primary"
               />
             </div>
           </div>
@@ -163,23 +210,31 @@ function QuickLinkTile({
   icon,
   label,
   description,
+  count,
   accent,
 }: {
   to: string;
   icon: React.ReactNode;
   label: string;
   description: string;
+  /** Number of records inside the screen; hidden when undefined/null. */
+  count?: number | null;
   accent: keyof typeof QUICK_LINK_ACCENTS;
 }) {
   const { badge, hoverShadow } = QUICK_LINK_ACCENTS[accent];
   return (
     <Link to={to}>
-      <Card interactive className={`group flex h-full flex-col gap-3 transition-shadow duration-200 ${hoverShadow}`}>
+      <Card interactive className={`group relative flex h-full flex-col gap-3 transition-shadow duration-200 ${hoverShadow}`}>
         <span
           className={`flex h-9 w-9 items-center justify-center rounded-md shadow-sm transition-transform duration-200 group-hover:scale-110 ${badge}`}
         >
           {icon}
         </span>
+        {count != null && (
+          <span className="absolute right-4 top-4 rounded-full bg-surface-variant px-2.5 py-0.5 text-xs font-bold text-text-primary">
+            {count}
+          </span>
+        )}
         <div className="flex items-end justify-between gap-2">
           <div>
             <p className="text-sm font-semibold text-text-primary">{label}</p>
